@@ -1,4 +1,4 @@
-# Notes
+# 2026-05-13
 
 ## Prior Art
 
@@ -96,8 +96,6 @@
 * [picohttpparser](https://github.com/h2o/picohttpparser)
   * used in Perl
   * relocatable
-
-<div style="break-after: page;"></div>
 
 ### IPC
 
@@ -236,3 +234,14 @@ sendmsg("close slot=$i ...", fd=fd)
 ```
 
 </td></tr></tbody></table>
+
+# 2026-05-19
+
+## Architecture
+
+* [`CLONE_FILES`](https://man7.org/linux/man-pages/man2/clone.2.html)
+  * example: [`playground/clone_files.c`](./playground/clone_files.c)
+    * `open(2)` after `exec(3)` unless `OPEN_BEFORE_EXEC` is defined
+  * [`execve(2)`](https://man7.org/linux/man-pages/man2/execve.2.html):
+
+    > The file descriptor table is unshared, undoing the effect of the `CLONE_FILES` flag of [`clone(2)`](https://man7.org/linux/man-pages/man2/clone.2.html).
