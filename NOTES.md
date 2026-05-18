@@ -245,3 +245,130 @@ sendmsg("close slot=$i ...", fd=fd)
   * [`execve(2)`](https://man7.org/linux/man-pages/man2/execve.2.html):
 
     > The file descriptor table is unshared, undoing the effect of the `CLONE_FILES` flag of [`clone(2)`](https://man7.org/linux/man-pages/man2/clone.2.html).
+
+### Listener
+
+```{.dot}
+digraph {
+  subgraph cluster {
+    label="CLONE_FILES";
+    keeper [label="Keeper"];
+    listener1 [label="Listener 1"];
+    listener2 [label="Listener 2"];
+    listener3 [label="..."];
+    keeper -> listener1 [label="clone(2)"];
+    keeper -> listener2 [label="clone(2)"];
+    keeper -> listener3;
+  }
+
+  worker1 [label="Worker"];
+  worker2 [label="Worker"];
+  worker3 [label="..."]
+  worker4 [label="..."]
+  listener1 -> worker1 [label="exec(3)"];
+  listener2 -> worker2 [label="exec(3)"];
+  listener1 -> worker3;
+  listener2 -> worker4;
+
+  listener1 -> listener1 [label="1. accept(2)",style=dashed];
+  listener1 -> worker1 [label="2. incoming\nconnection",style=dashed];
+
+  worker2 -> listener2 [label="1. connect\nto...",style=dashed];
+  listener2 -> listener2 [label="2. connect(2)",style=dashed];
+  listener2 -> worker2 [label="3. outgoing\nconnection",style=dashed];
+}
+```
+
+* *Worker* is separated executable from *Keeper*/*Listener*
+* crash after `accept(2)` in *Listener*:
+  * ```c
+    int fd = accept(...);
+    // CRASH
+    shared->connections[i].fd = fd;
+    ```
+  * recovery:
+
+    ```c
+    DIR *d = opendir("/proc/self/fd");
+    struct dirent *e;
+    while(e = readdir(d)) {
+      if(!is_known_fd(e)) {
+        // file descriptor "forgotten" after accept(2)
+        shared->connections[i].fd = atoi(e->d_name);
+      }
+    }
+    ```
+  * multiple file descriptors cannot be recovered properly
+  * **locking around `accept(2)`**
+* `connect(2)`
+  * can be dropped?
+* *Keeper* or *Listener* can die
+  * no state lost
+  * (new) *Keeper* starts new *Listeners*
+    * maybe re-`exec(2)`
+* *Worker* dies
+  * *Listener* just restarts it with its file descriptors
+
+### Master-Workers
+
+```{.dot}
+digraph G {
+  master [label="Master"];
+
+  subgraph cluster_1 {
+    label="CLONE_FILES";
+    backup1 [label="Backup 1"];
+    worker1 [label="Worker 1"];
+    backup1 -> worker1 [label="clone(2)"];
+  }
+  master -> backup1 [label="exec(3)"];
+
+  subgraph cluster_2 {
+    label="CLONE_FILES";
+    backup2 [label="Backup 2"];
+    worker2 [label="Worker 2"];
+    backup2 -> worker2 [label="clone(2)"];
+  }
+  master -> backup2 [label="exec(3)"];
+
+  backup1 -> backup2 [constraint=false,dir=both,style=dashed,label="shared\nlistening\nsockets"];
+
+  worker1 -> worker1 [label="accept(2)",style=dashed];
+
+  worker2 -> worker2 [label="connect(2)",style=dashed];
+}
+```
+
+* *Backup* and *Worker* must be same executable
+* crash after `accept(2)` in *Worker*:
+  * recovery like in [Listener](#listener)
+  * single-threaded *Worker*
+    * at most only one new file descriptor
+    * still parallel `accept(2)`
+* Worker-Backup-process-pair might die
+  * connections of that process pair will be lost
+    * **easy**
+  * `sendmsg(2)` file descriptors to Master?
+* Master dies?
+  * **TODO**
+
+### Transformation
+
+* Transactions
+
+  ```c
+  int state;
+  char src_buffer[...];
+  char dst_buffer[...];
+
+  if(state != POST_TRANSFORM) {
+    state = PRE_TRANSFORM;
+
+    transform(dst_buffer, src_buffer);
+    // CRASH up until here will just redo transform
+
+    state = POST_TRANSFORM; // atomic
+
+    // CRASH will use transformed data
+  }
+  ```
