@@ -31,6 +31,7 @@
   * workers finish their [`accept(2)`](https://man7.org/linux/man-pages/man2/accept.2.html)-ed
     requests and exit
   * new workers are spawned
+* [systemd fdstore](https://systemd.io/FILE_DESCRIPTOR_STORE/)
 
 ## [TU Dresden/Software Fault Tolerance](https://tu-dresden.de/ing/informatik/sya/se/studium/lehrveranstaltungen/summer-semester/SFT?set_language=en)
 
@@ -235,7 +236,7 @@ sendmsg("close slot=$i ...", fd=fd)
 
 </td></tr></tbody></table>
 
-# 2026-05-19
+# 2026-05-26
 
 ## Architecture
 
@@ -312,7 +313,7 @@ digraph {
 ### Master-Workers
 
 ```{.dot}
-digraph G {
+digraph {
   master [label="Master"];
 
   subgraph cluster_1 {
@@ -352,23 +353,166 @@ digraph G {
 * Master dies?
   * **TODO**
 
+### Multiple Services
+
+```{.dot}
+digraph {
+  rankdir=TD;
+  subgraph cluster {
+    label="listener.service";
+
+    backup [label="Backup"];
+    listener1 [label="Listener"];
+    listener2 [label="Listener"];
+    listener3 [label="Listener"];
+    listener4 [label="Listener"];
+
+    backup -> listener1 [taillabel="clone(CLONE_FILES)"];
+    listener1 -> listener2 [style=dashed];
+    listener2 -> listener3 [style=dashed];
+    listener3 -> listener4 [style=dashed];
+  }
+
+  subgraph cluster_1 {
+    label="worker.service";
+
+    worker1 [label="Worker"];
+    worker2 [label="Worker"];
+    worker3 [label="Worker"];
+    worker4 [label="Worker"];
+    worker5 [label="Worker"];
+    worker6 [label="Worker"];
+    worker1 -> worker2 [style=dashed];
+    worker2 -> worker3 [style=dashed];
+    worker3 -> worker4 [style=dashed];
+    worker4 -> worker5 [style=dashed];
+    worker5 -> worker6 [style=dashed,label="only now\nuse the\nconnection"];
+  }
+
+  systemd -> backup;
+  systemd -> worker1;
+
+  worker1 -> listener1 [constraint=false,taillabel="connect(\"/run/.../socket\")"];
+  listener1 -> worker2 [constraint=false,label="file descriptors,\nshared memory"];
+  listener2 -> listener2 [constraint=false,label="accept(listen_fd)"];
+  listener3 -> worker3 [constraint=false,label="accepted\nfile descriptor"];
+  worker4 -> worker4 [constraint=false,label="connect(...)"];
+  worker5 -> listener4 [constraint=false,label="backup\nfile descriptor"];
+}
+```
+
+* separate systemd services
+  * `keeper.service`
+    * process pairs
+    * single-threaded or locking around `accept(2)`/`recvmsg(2)`
+    * `accept(2)` incoming connection, dispatch to worker(s)
+  * `worker.service`
+    * can crash/be restarted without state loss
+    * state kept by keeper
+    * unsafe `connect(2)`, will be redone
+
 ### Transformation
 
-* Transactions
+* ```c
+  struct buffer {
+    char buf[];
+    size_t len;
+  }
 
-  ```c
-  int state;
-  char src_buffer[...];
-  char dst_buffer[...];
+  struct {
+    int state;
+    struct buffer downstream_rx;
+    struct buffer downstream_tx;
+    struct buffer upstream_rx;
+    struct buffer upstream_tx;
+  };
 
-  if(state != POST_TRANSFORM) {
-    state = PRE_TRANSFORM;
+  struct mmsghdr msg;
+  switch(state) {
 
-    transform(dst_buffer, src_buffer);
-    // CRASH up until here will just redo transform
+  case PRE_RECV:
+    msg = {
+      .msg_hdr = /* ...downstream_rx... */;
+      .msg_len = -1;
+    };
+    state = RECV;
 
-    state = POST_TRANSFORM; // atomic
+  case RECV:
+    if(msg.msg_len == -1) {
+      recvmmsg(fd, &msg, 1, ...);
+    }
+    state = TRANSFORM;
 
-    // CRASH will use transformed data
+  case TRANSFORM:
+    transform(&downstream_rx, &upstream_tx)
+    state = PRE_SEND;
+
+  case PRE_SEND:
+    msg = {
+      .msg_hdr = /* ...upstream_tx... */;
+      .msg_len = -1;
+    };
+    state = SEND;
+
+  case SEND:
+    if(msg.msg_len == -1) {
+      sendmmsg(fd, &msg, 1, ...);
+    }
+    state = START;
+
+  }
+  ```
+* ```{.dot}
+  digraph {
+    {
+      rank=same;
+      pre_recv [label="msg.msg_len := -1\lstate := RECV"];
+      post_send [label="state := PRE_RECV"];
+    }
+    {
+      rank=same;
+      recv [label="recvmmsg(fd, &msg, ...)"];
+      send [label="sendmmsg(fd, &msg, ...)"];
+    }
+    {
+      rank=same;
+      post_recv [label="state := TRANSFORM"];
+      pre_send [label="msg.msg_len := -1\lstate := SEND"];
+    }
+    {
+      rank=same;
+      transform [label="transform(&downstream_rx,\r&upstream_tx)"];
+      post_transform [label="state := PRE_SEND"];
+    }
+
+    pre_recv -> recv;
+    recv -> post_recv;
+    post_recv -> transform;
+    transform -> post_transform;
+    post_transform -> pre_send;
+    pre_send -> send;
+    send -> post_send;
+    post_send -> pre_recv [constraint=false];
+
+    start_init [shape=point];
+    start_init -> pre_recv [label="state == PRE_RECV"];
+
+    start_recv [shape=point];
+    start_recv -> recv [style=dashed,label="state == RECV &&\nmsg.msg_len == -1"];
+
+    start_post_recv [shape=point];
+    start_post_recv -> post_recv [style=dashed,label="state == RECV &&\nmsg.msg_len != -1"];
+
+    start_transform [shape=point];
+    start_transform -> transform [style=dashed,label="state == TRANSFORM"];
+
+    start_pre_send [shape=point];
+    start_pre_send -> pre_send [style=dashed,label="state == PRE_SEND"];
+
+    start_send [shape=point];
+    start_send -> send [style=dashed,label="state == SEND &&\nmsg.msg_len == -1"];
+
+    start_post_send [shape=point];
+    start_post_send -> post_send [style=dashed,label="state == SEND &&\nmsg.msg_len != -1"];
   }
   ```
