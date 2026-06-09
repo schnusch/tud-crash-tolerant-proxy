@@ -1,0 +1,26 @@
+on:
+  push: {}
+  pull_request: {}
+jobs:
+  doxygen:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - run: sudo apt-get update && sudo apt-get install -y doxygen
+    - run: doxygen
+    - uses: actions/upload-pages-artifact@v3
+      with:
+        path: doc/html
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs:
+    - doxygen
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+    - uses: actions/deploy-pages@v4
+      env:
+        name: github-pages
