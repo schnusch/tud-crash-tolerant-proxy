@@ -13,7 +13,7 @@ notes.html: NOTES.md
 	  echo '</style>'; \
 	  echo; \
 	  cat NOTES.md; \
-	} | pandoc -o $@ -f markdown+gfm_auto_identifiers --lua-filter=contrib/pandoc-ext/diagram/diagram.lua --embed-resources
+	} | pandoc -o $@ -f markdown+gfm_auto_identifiers --lua-filter=thirdparty/pandoc-ext/diagram/diagram.lua --embed-resources
 
 clean:
 	$(RM) notes.html

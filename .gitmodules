@@ -1,3 +1,3 @@
-[submodule "contrib/pandoc-ext/diagram"]
-	path = contrib/pandoc-ext/diagram
+[submodule "thirdparty/pandoc-ext/diagram"]
+	path = thirdparty/pandoc-ext/diagram
 	url = https://github.com/pandoc-ext/diagram.git
