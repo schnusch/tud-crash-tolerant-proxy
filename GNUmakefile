@@ -1,0 +1,96 @@
+# customization variables
+
+# Location where the finished executables will be installed, e.g. /usr/local
+PREFIX = /usr/local
+
+# Paths of the finished executables relative to $(PREFIX).
+LISTENER = bin/crash-tolerant-proxy
+WORKER = libexec/crash-tolerant-proxy-worker
+
+# Pre-processor flags
+# Use $(*FLAGS) to replace default flags and $(EXTRA_*FLAGS) to append.
+CPPFLAGS = -DSHARED_MEMORY_RELOCATABLE -DHAVE_SYSTEMD -DUSE_VALGRIND
+EXTRA_CPPFLAGS =
+final_cppflags = $(CPPFLAGS) $(EXTRA_CPPFLAGS)
+
+# Compiler flags
+# Use $(*FLAGS) to replace default flags and $(EXTRA_*FLAGS) to append.
+CFLAGS = -g -O2 -Wall -Wextra -Wpedantic
+EXTRA_CFLAGS = #-fsanitize=address,undefined
+final_cflags = $(CFLAGS) $(EXTRA_CFLAGS) -std=c99 -Werror=vla \
+	-DLISTENER_PATH='"$(PREFIX)/$(LISTENER)"' \
+	-DWORKER_PATH='"$(PREFIX)/$(WORKER)"'
+
+# Linker flags
+# Use $(*FLAGS) to replace default flags and $(EXTRA_*FLAGS) to append.
+LDFLAGS =
+EXTRA_LDFLAGS = #-fsanitize=address,undefined
+final_ldflags = $(LDFLAGS) $(EXTRA_LDFLAGS)
+
+# internal varibales
+
+COMMON_SRCS = $(filter-out common/cmdline.c,$(shell find common -xtype f -name '*.c'))
+
+LISTENER_SRCS = $(shell find listener -xtype f -name '*.c') $(COMMON_SRCS)
+LISTENER_OBJS = $(patsubst %.c,obj/%.o,$(LISTENER_SRCS))
+
+WORKER_SRCS = $(shell find worker -xtype f -name '*.c') \
+	$(COMMON_SRCS) \
+	thirdparty/picohttpparser/picohttpparser.c
+WORKER_OBJS = $(patsubst %.c,obj/%.o,$(WORKER_SRCS))
+
+# *.o are located in obj/, executables in bin/.
+
+.PHONY: all check clean install
+
+all: bin/listener bin/worker
+
+check:
+	$(MAKE) -C tests final_cppflags='$(final_cppflags)' $@
+
+doc: Doxyfile $(LISTENER_SRCS) $(WORKER_SRCS)
+	{ cat Doxyfile && echo 'OUTPUT_DIRECTORY = ./$@.tmp'; } | doxygen -
+	$(RM) -r $@
+	mv $@.tmp $@
+
+clean:
+	$(RM) -r bin doc obj notes.html *.tmp vgcore.*
+	$(MAKE) -C tests $@
+
+install: bin/listener bin/worker
+	install -Dm 755 bin/listener $(DESTDIR)$(PREFIX)/$(LISTENER)
+	install -Dm 755 bin/worker $(DESTDIR)$(PREFIX)/$(WORKER)
+
+bin/listener: $(LISTENER_OBJS)
+	@mkdir -p $(@D)
+	$(CC) -o $@ $(LISTENER_OBJS) $(final_ldflags) -lsystemd
+
+bin/worker: $(WORKER_OBJS)
+	@mkdir -p $(@D)
+	$(CC) -o $@ $(WORKER_OBJS) $(final_ldflags)
+
+obj/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(final_cppflags) $(final_cflags) -c -o $@ $<
+
+notes.html: NOTES.md
+	{ echo '<style>'; \
+	  echo '  h1, h2, h3, h4, h5, h6 { break-after: avoid; }'; \
+	  echo '  ul { padding-left: 1em; }'; \
+	  echo '  p, pre { margin: 0; }'; \
+	  echo '  blockquote { margin: 0; padding-left: 0.5em; border-left: 0.25em solid lightgray; }'; \
+	  echo '  img { max-width: 100%; }'; \
+	  echo '  @media print {'; \
+	  echo '    body { font-size: 11pt; column-count: 2; column-fill: auto; }'; \
+	  echo '  }'; \
+	  echo '</style>'; \
+	  echo; \
+	  cat NOTES.md; \
+	} | pandoc -o $@ -f markdown+gfm_auto_identifiers --lua-filter=thirdparty/pandoc-ext/diagram/diagram.lua --embed-resources
+
+# https://www.gnu.org/software/make/manual/html_node/Automatic-Prerequisites.html
+obj/%.d: %.c
+	@mkdir -p $(@D)
+	@printf 'DEP\t%s\n' $< >&2
+	@$(CC) $(final_cppflags) -MM -MF $@ -MT '$(@:.d=.o) $@' $<
+-include $(LISTENER_OBJS:.o=.d) $(WORKER_OBJS:.o=.d)
