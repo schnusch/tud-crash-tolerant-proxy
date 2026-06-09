@@ -1,3 +1,6 @@
+[submodule "thirdparty/picohttpparser"]
+	path = thirdparty/picohttpparser
+	url = https://github.com/h2o/picohttpparser.git
 [submodule "thirdparty/pandoc-ext/diagram"]
 	path = thirdparty/pandoc-ext/diagram
 	url = https://github.com/pandoc-ext/diagram.git
