@@ -1,0 +1,201 @@
+\documentclass[a5paper,landscape]{scrartcl}
+\usepackage[hmargin=10mm,vmargin=10mm]{geometry}
+\usepackage[default]{opensans}
+\usepackage{pifont}
+\usepackage{polyglossia}
+\setmainlanguage{english}
+\usepackage{tikz}
+\usetikzlibrary{positioning,fit}
+\pagestyle{empty}
+\begin{document}
+\section*{init}
+\vfill
+
+\hfill
+\begin{tikzpicture}[
+    >=stealth,
+    node distance=18mm and 30mm,
+    process/.style={draw, rounded corners, minimum width=18mm, minimum height=7mm},
+    wait/.style={dashed, ->},
+    action/.style={->}
+]
+
+% Cluster CLONE_FILES
+\node[process] (passive) {passive};
+\node[process, below=of passive] (active) {active};
+
+\node[draw, inner sep=8mm, fit=(passive)(active), label=above:listener (\texttt{CLONE\_FILES})] (listener) {};
+
+% Workers
+\node[below=of active,inner sep=0] (ipc) {};
+
+\node[process, below left=of ipc] (worker1) {worker 1};
+\node[process, below right=of ipc] (worker2) {...};
+
+\node[draw, dashed, fit=(active)(worker1)(worker2), label=below:process group] (process-group) {};
+
+% edges
+\draw[action] (ipc) -- node[near end] {\texttt{socketpair[0]}} (active);
+\draw[action] (ipc) to[bend left=30] node[near end] {\texttt{socketpair[1]}} (worker1);
+\draw[action] (ipc) to[bend right=30] node[near end] {\texttt{socketpair[1]}} (worker2);
+
+\draw[action] (passive) edge[loop above] node[right] {\ding{172} \texttt{bind()}, \texttt{listen()}} ();
+\draw[action] (passive) edge[loop left] node[left] {\ding{173} init shared memory} ();
+\draw[action] (passive) edge[loop right] node[right] {\ding{174} \texttt{socketpair(SOCK\_SEQPACKET)}} ();
+
+\draw[action] (passive) -- node[right] {\ding{175} \texttt{clone(CLONE\_FILES)}} (active);
+\draw[wait] (active) edge[loop right] node[right] {\ding{176} \texttt{recover(\char34 /proc/self/fd\char34 )}} ();
+
+\draw[action] (active) to[bend right=10] node[left] {\shortstack{\texttt{\ding{177} fork}\\\texttt{\ding{178} exec}}} (worker1);
+\draw[action] (active) to[bend left=10] node[right] {\shortstack{\texttt{\ding{177} fork}\\\texttt{\ding{178} exec}}} (worker2);
+
+\draw[wait] (active) to[bend left=30] node[right] {\ding{179} \texttt{sendmsg()}} (worker1);
+
+\end{tikzpicture}
+\hfill
+\null
+
+\vfill
+\pagebreak
+\section*{accept}
+\vfill
+
+\hfill
+\begin{tikzpicture}[
+    >=stealth,
+    node distance=18mm and 30mm,
+    process/.style={draw, rounded corners, minimum width=18mm, minimum height=7mm},
+    wait/.style={dashed, ->},
+    action/.style={->}
+]
+
+% Cluster CLONE_FILES
+\node[process] (passive) {passive};
+\node[process, below=of passive] (active) {active};
+
+\node[draw, inner sep=8mm, fit=(passive)(active), label=above:listener (\texttt{CLONE\_FILES})] (listener) {};
+
+% Workers
+\node[below=of active,inner sep=0] (ipc) {};
+
+\node[process, below left=of ipc] (worker1) {worker 1};
+\node[process, below right=of ipc] (worker2) {...};
+
+\node[draw, dashed, fit=(active)(worker1)(worker2), label=below:process group] (process-group) {};
+
+% edges
+\draw[action] (ipc) -- (active);
+\draw[action] (ipc) to[bend left=30] (worker1);
+\draw[action] (ipc) to[bend right=30] (worker2);
+
+\draw[action] (active) edge[loop right] node[right] {\ding{172} \texttt{accept()}} ();
+\draw[action] (active) to[bend left=30] node[left] {\ding{173} \texttt{sendmsg()}} (worker1);
+\draw[action] (worker1) edge[loop below] node[below] {\ding{174} use connection} ();
+
+\end{tikzpicture}
+\hfill
+\null
+
+\vfill
+\pagebreak
+\section*{connect}
+\vfill
+
+\hfill
+\begin{tikzpicture}[
+    >=stealth,
+    node distance=18mm and 30mm,
+    process/.style={draw, rounded corners, minimum width=18mm, minimum height=7mm},
+    wait/.style={dashed, ->},
+    action/.style={->}
+]
+
+% Cluster CLONE_FILES
+\node[process] (passive) {passive};
+\node[process, below=of passive] (active) {active};
+
+\node[draw, inner sep=8mm, fit=(passive)(active), label=above:listener (\texttt{CLONE\_FILES})] (listener) {};
+
+% Workers
+\node[below=of active,inner sep=0] (ipc) {};
+
+\node[process, below left=of ipc] (worker1) {worker 1};
+\node[process, below right=of ipc] (worker2) {...};
+
+\node[draw, dashed, fit=(active)(worker1)(worker2), label=below:process group] (process-group) {};
+
+% edges
+\draw[action] (ipc) -- (active);
+\draw[action] (ipc) to[bend left=30] (worker1);
+\draw[action] (ipc) to[bend right=30] (worker2);
+
+\draw[action] (worker1) edge[loop left] node[left] {\ding{172} \texttt{connect()}} ();
+\draw[action] (worker1) to[bend right=20] node[left] {\ding{173} \texttt{sendmsg()}} (active);
+\draw[action] (active) to[bend left=30] node[right] {\ding{174} ACK} (worker1);
+\draw[action] (worker1) edge[loop below] node[below] {\ding{175} use connection} ();
+
+\end{tikzpicture}
+\hfill
+\null
+
+\vfill
+\pagebreak
+\section*{failure modes}
+\vfill
+
+\hfill
+\begin{tikzpicture}[
+    >=stealth,
+    node distance=18mm and 30mm,
+    process/.style={draw, rounded corners, minimum width=18mm, minimum height=7mm},
+    wait/.style={dashed, ->},
+    action/.style={->}
+]
+
+% Cluster CLONE_FILES
+\node[process] (passive) {passive};
+\draw[wait] (passive) edge[loop left] node[left] {\texttt{pidfd\_open(getpid(), 0)}} ();
+\node[process, below=of passive] (active) {active};
+
+\node[draw, inner sep=8mm, fit=(passive)(active), label=above:listener (\texttt{CLONE\_FILES})] (listener) {};
+
+% Workers
+\node[below=of active,inner sep=0] (ipc) {};
+
+\node[process, below left=of ipc] (worker1) {worker 1};
+\node[process, below right=of ipc] (worker2) {...};
+
+\node[draw, dashed, fit=(active)(worker1)(worker2), label=below:process group] (process-group) {};
+
+% edges
+\draw[action] (ipc) -- node[near end] {\texttt{socketpair[0]}} (active);
+\draw[action] (ipc) to[bend left=30] node[near end] {\texttt{socketpair[1]}} (worker1);
+\draw[action] (ipc) to[bend right=30] node[near end] {\texttt{socketpair[1]}} (worker2);
+
+\draw[wait] (passive) to[bend right=60] node[left] {\ding{172} \texttt{waitpid}} (active);
+\draw[wait] (active) to[bend right=60] node[right] {\ding{173} \texttt{poll(pidfd)}} (passive);
+\draw[wait] (active) to[bend right=40] node[left] {\ding{174} \texttt{waitpid}} (worker1);
+\draw[wait] (worker1) to[bend right=15] node[near end,right] {\ding{175} EOF} (listener);
+
+\end{tikzpicture}
+\hfill
+\parbox[b]{60mm}{%
+    \KOMAoptions{parskip=half}%
+    \ding{172} \textit{active} dies:\newline
+    restart \textit{active}; transparent for \textit{workers}
+
+    \ding{173} \textit{passive} dies (cannot use \texttt{pipe}):\newline
+    \textit{active} becomes new \textit{passive}, spawn new \textit{active}; transparent for \textit{workers}
+
+    \ding{174} \textit{worker} dies:\newline
+    restart \textit{worker}; transparent for other \textit{workers}
+
+    \ding{175} \textbf{TODO} listener process pair died:\newline
+    \textbf{one} \textit{worker} becomes new \textit{passive}, other send file descriptors to new \textit{passive} and exit
+
+    \textbf{upgrade:}\newline
+    \textit{passive} kills process group, re-execs itself
+}%
+
+\vfill
+\end{document}
