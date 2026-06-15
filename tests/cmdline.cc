@@ -1,3 +1,5 @@
+#include <gtest/gtest.h>
+
 extern "C" {
 #include "../listener/cmdline.h"
 }

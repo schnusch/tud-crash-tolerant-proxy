@@ -1,3 +1,5 @@
+#include <gtest/gtest.h>
+
 #include <climits>
 extern "C" {
 #include <sys/un.h>

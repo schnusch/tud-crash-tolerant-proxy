@@ -1,4 +1,8 @@
+#include <gtest/gtest.h>
+
 extern "C" {
+#include <poll.h>
+#include <sys/socket.h>
 #include "../common/ipc.h"
 }
 
@@ -15,6 +19,42 @@ protected:
         this->sockpair[1] < 0 || close(this->sockpair[1]);
     }
 };
+
+TEST_F(Test_ipc, seqpacket) {
+    struct pollfd pfd = {
+        .fd = this->sockpair[1],
+        .events = POLLIN,
+    };
+
+    ASSERT_EQ(poll(&pfd, 1, 0), 0);
+
+    static const char tx[] = "data";
+
+    ASSERT_GE(send(this->sockpair[0], tx, strlen(tx), MSG_DONTWAIT), 0);
+    ASSERT_GE(send(this->sockpair[0], tx, strlen(tx), MSG_DONTWAIT), 0);
+
+    char rx[2 * sizeof(tx)];
+
+    ASSERT_EQ(poll(&pfd, 1, 0), 1);
+    EXPECT_TRUE(pfd.revents & POLLIN);
+    ASSERT_EQ(recv(pfd.fd, rx, sizeof(rx) - 1, MSG_DONTWAIT), strlen(tx));
+    rx[strlen(tx)] = '\0';
+    ASSERT_STREQ(rx, tx);
+
+    ASSERT_EQ(poll(&pfd, 1, 0), 1);
+    EXPECT_TRUE(pfd.revents & POLLIN);
+    ASSERT_EQ(recv(pfd.fd, rx, sizeof(rx) - 1, MSG_DONTWAIT), strlen(tx));
+    rx[strlen(tx)] = '\0';
+    ASSERT_STREQ(rx, tx);
+
+    ASSERT_EQ(poll(&pfd, 1, 0), 0);
+    ASSERT_EQ(close(this->sockpair[0]), 0);
+    this->sockpair[0] = -1;
+
+    ASSERT_EQ(poll(&pfd, 1, 0), 1);
+    EXPECT_TRUE(pfd.revents & POLLHUP);
+    ASSERT_EQ(recv(pfd.fd, rx, sizeof(rx), MSG_DONTWAIT), 0);
+}
 
 class Test_ipc_send : public Test_ipc { };
 
