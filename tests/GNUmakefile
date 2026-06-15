@@ -1,9 +1,17 @@
-OBJS = \
+PREREQS = \
 	../obj/common/ipc.o \
 	../obj/common/util.o \
 	../obj/common/shared_memory.o \
 	../obj/listener/cmdline.o \
-	../obj/listener/fd_map.o
+	../obj/listener/fd_map.o \
+	../obj/worker/atomic_send_recv.o
+
+OBJS = \
+	atomic.o \
+	cmdline.o \
+	fd_map.o \
+	ipc.o \
+	util.o
 
 CPPFLAGS =
 final_cppflags := $(CPPFLAGS) $(shell pkgconf --cflags gtest)
@@ -14,17 +22,20 @@ check: main
 	valgrind ./main
 
 clean:
-	$(RM) -r main main.d
+	$(RM) -r main *.d *.o
 
-main: main.cc $(OBJS)
-	$(MAKE) -C .. final_cppflags='$(final_cppflags)' $(patsubst ../%,%,$(OBJS))
-	$(CXX) $(final_cppflags) $(final_cxxflags) -o $@ $< $(OBJS) $(shell pkgconf --libs gtest)
+main: main.o $(OBJS) $(PREREQS)
+	$(MAKE) -C .. final_cppflags='$(final_cppflags) -DUSE_LIBCRASH' $(patsubst ../%,%,$(PREREQS))
+	$(CXX) $(final_cppflags) $(final_cxxflags) -o $@ $< $(OBJS) $(PREREQS) $(shell pkgconf --libs gtest)
 
 ../%.o: main.cc
-	$(MAKE) -C .. final_cppflags='$(final_cppflags)' $(patsubst ../%,%,$@)
+	$(MAKE) -C .. final_cppflags='$(final_cppflags) -DUSE_LIBCRASH' $(patsubst ../%,%,$@)
 
-main.d: main.cc
+%.o: %.cc
+	$(CXX) $(final_cppflags) $(final_cxxflags) -c -o $@ $<
+
+%.d: %.cc
 	@mkdir -p $(@D)
 	@printf 'DEP\t%s\n' $< >&2
-	@$(CXX) $(final_cppflags) -MM -MF $@ -MT '$(@:.d=) $@' $<
--include main.d
+	@$(CXX) $(final_cppflags) -MM -MF $@ -MT '$(@:.d=.o) $@' $<
+-include main.d $(WORKER_OBJS:.o=.d)
