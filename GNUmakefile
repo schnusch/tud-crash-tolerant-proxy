@@ -46,7 +46,7 @@ WORKER_OBJS = $(patsubst %.c,obj/%.o,$(WORKER_SRCS))
 all: bin/listener bin/worker
 
 check:
-	$(MAKE) -C tests final_cppflags='$(final_cppflags)' $@
+	$(MAKE) -C tests CPPFLAGS='$(final_cppflags)' $@
 
 doc: Doxyfile $(LISTENER_SRCS) $(WORKER_SRCS)
 	{ cat Doxyfile && echo 'OUTPUT_DIRECTORY = ./$@.tmp'; } | doxygen -

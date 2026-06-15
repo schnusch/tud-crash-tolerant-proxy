@@ -3,6 +3,7 @@
   stdenv,
   doxygen,
   gtest,
+  pkgconf,
   systemd,
 }:
 
@@ -23,6 +24,10 @@ stdenv.mkDerivation {
 
   buildInputs = [
     systemd
+  ];
+
+  nativeCheckInputs = [
+    pkgconf
   ];
 
   checkInputs = [

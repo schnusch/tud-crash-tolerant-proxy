@@ -6,9 +6,14 @@
 callPackage ./package.nix {
   stdenv = stdenv // {
     mkDerivation =
-      { buildInputs, checkInputs, ... }:
+      {
+        buildInputs,
+        checkInputs ? [ ],
+        nativeCheckInputs ? [ ],
+        ...
+      }:
       pkgs.mkShell {
-        buildInputs = buildInputs ++ checkInputs;
+        buildInputs = buildInputs ++ checkInputs ++ nativeCheckInputs;
       };
   };
 }

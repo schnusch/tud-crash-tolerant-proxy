@@ -5,6 +5,9 @@ OBJS = \
 	../obj/listener/cmdline.o \
 	../obj/listener/fd_map.o
 
+CPPFLAGS =
+final_cppflags := $(CPPFLAGS) $(shell pkgconf --cflags gtest)
+
 .PHONY: check clean
 
 check: main
@@ -15,7 +18,7 @@ clean:
 
 main: main.cc $(OBJS)
 	$(MAKE) -C .. final_cppflags='$(final_cppflags)' $(patsubst ../%,%,$(OBJS))
-	$(CXX) $(final_cppflags) $(final_cxxflags) -o $@ $< $(OBJS) -lgtest
+	$(CXX) $(final_cppflags) $(final_cxxflags) -o $@ $< $(OBJS) $(shell pkgconf --libs gtest)
 
 ../%.o: main.cc
 	$(MAKE) -C .. final_cppflags='$(final_cppflags)' $(patsubst ../%,%,$@)
