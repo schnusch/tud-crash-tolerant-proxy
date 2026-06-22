@@ -22,7 +22,7 @@ void double_buffer_append(struct double_buffer *buf, const char *tail, size_t si
     );
     buf->buffers[!buf->active].used = ACTIVE_BUFFER(buf)->used + size;
     LIBCRASH_HOOK(double_buffer_append(buf, !!buf->active));
-    buf->active = !buf->active;
+    atomic_store_explicit(&buf->active, !buf->active, memory_order_release);
 }
 
 void double_buffer_lshift(struct double_buffer *buf, size_t size) {
@@ -41,7 +41,7 @@ void double_buffer_lshift(struct double_buffer *buf, size_t size) {
         buf->buffers[!buf->active].used = ACTIVE_BUFFER(buf)->used - size;
     }
     LIBCRASH_HOOK(double_buffer_lshift(buf, !!buf->active));
-    buf->active = !buf->active;
+    atomic_store_explicit(&buf->active, !buf->active, memory_order_release);
 }
 
 int atomic_send(int fd, struct double_buffer *buf) {
@@ -50,15 +50,15 @@ int atomic_send(int fd, struct double_buffer *buf) {
     default:
     case ATOMIC_INIT:
         // The following value will be overwritten once sendmmsg returned.
-        // So as long as `state == SEND_SEND && mm.msg_len == -1` sendmmsg did
-        // not complete.
+        // So as long as `state == ATOMIC_DO_SYSCALL && mm.msg_len == -1`
+        // sendmmsg did not complete.
         _Static_assert(
             (unsigned int)-1 > sizeof(ACTIVE_BUFFER(buf)->buf),
             "sentinel value cannot be returned by sendmmsg"
         );
         buf->mm.msg_len = -1;
         LIBCRASH_HOOK(atomic_send_prepare(fd, buf));
-        buf->state = ATOMIC_DO_SYSCALL;
+        atomic_store_explicit(&buf->state, ATOMIC_DO_SYSCALL, memory_order_release);
         __attribute__((fallthrough));
     case ATOMIC_DO_SYSCALL:
         // Pointers might be inconsistent.
@@ -80,23 +80,23 @@ int atomic_send(int fd, struct double_buffer *buf) {
         }
         // The next part gets quite ugly, just remember `case` is just a `goto`.
         // So the if-else is only evaluated when coming from `ATOMIC_DO_SYSCALL`.
-        // Only `buf->active = ...` is re-used by `ATOMIC_MEMCPY_*` and is
+        // Only `buf->active = ...` is re-used by `ATOMIC_SWAP_*` and is
         // necessary if the active might have been swapped after memcpy
         // completed, but the state was not changed, which would not be
         // detected and the buffers would be swapped back on the next call.
         if(buf->active) {
-            buf->state = ATOMIC_MEMCPY_1to0;
+            atomic_store_explicit(&buf->state, ATOMIC_SWAP_1to0, memory_order_release);
             __attribute__((fallthrough));
-    case ATOMIC_MEMCPY_1to0:
+    case ATOMIC_SWAP_1to0:
             buf->active = 1;
         } else {
-            buf->state = ATOMIC_MEMCPY_0to1;
+            atomic_store_explicit(&buf->state, ATOMIC_SWAP_0to1, memory_order_release);
             __attribute__((fallthrough));
-    case ATOMIC_MEMCPY_0to1:
+    case ATOMIC_SWAP_0to1:
             buf->active = 0;
         }
         double_buffer_lshift(buf, buf->mm.msg_len);
-        buf->state = ATOMIC_INIT;
+        atomic_store_explicit(&buf->state, ATOMIC_INIT, memory_order_release);
         return 0;
     }
 }
@@ -110,15 +110,15 @@ int atomic_recv(int fd, struct double_buffer *buf) {
             return 0;
         }
         // The following value will be overwritten once sendmmsg returned.
-        // So as long as `state == RECV_RECV && mm.msg_len == -1` sendmmsg did
-        // not complete.
+        // So as long as `state == ATOMIC_DO_SYSCALL && mm.msg_len == -1`
+        // recvmmsg did not complete.
         _Static_assert(
             (unsigned int)-1 > sizeof(ACTIVE_BUFFER(buf)->buf),
             "sentinel value cannot be returned by recvmmsg"
         );
         buf->mm.msg_len = -1;
         LIBCRASH_HOOK(atomic_recv_prepare(fd, buf));
-        buf->state = ATOMIC_DO_SYSCALL;
+        atomic_store_explicit(&buf->state, ATOMIC_DO_SYSCALL, memory_order_release);
         __attribute__((fallthrough));
     case ATOMIC_DO_SYSCALL:
         if(sizeof(ACTIVE_BUFFER(buf)->buf) < ACTIVE_BUFFER(buf)->used) {
@@ -144,24 +144,24 @@ int atomic_recv(int fd, struct double_buffer *buf) {
         }
         // The next part gets quite ugly, just remember `case` is just a `goto`.
         // So the if-else is only evaluated when coming from `ATOMIC_DO_SYSCALL`.
-        // Only `buf->active = ...` is re-used by `ATOMIC_MEMCPY_*` and is
+        // Only `buf->active = ...` is re-used by `ATOMIC_SWAP_*` and is
         // necessary if the active might have been swapped after memcpy
         // completed, but the state was not changed yet. This would not be
         // detected and the buffers would be swapped back on the next call.
         if(buf->mm.msg_len == 0) {
-            buf->state = ATOMIC_RECV_EOF;
+            atomic_store_explicit(&buf->state, ATOMIC_RECV_EOF, memory_order_release);
             __attribute__((fallthrough));
     case ATOMIC_RECV_EOF:
             return 0;
         } else  if(buf->active) {
-            buf->state = ATOMIC_MEMCPY_1to0;
+            atomic_store_explicit(&buf->state, ATOMIC_SWAP_1to0, memory_order_release);
             __attribute__((fallthrough));
-    case ATOMIC_MEMCPY_1to0:
+    case ATOMIC_SWAP_1to0:
             buf->active = 1;
         } else {
-            buf->state = ATOMIC_MEMCPY_0to1;
+            atomic_store_explicit(&buf->state, ATOMIC_SWAP_0to1, memory_order_release);
             __attribute__((fallthrough));
-    case ATOMIC_MEMCPY_0to1:
+    case ATOMIC_SWAP_0to1:
             buf->active = 0;
         }
         double_buffer_append(
@@ -169,7 +169,7 @@ int atomic_recv(int fd, struct double_buffer *buf) {
             ACTIVE_BUFFER(buf)->buf + ACTIVE_BUFFER(buf)->used,
             buf->mm.msg_len
         );
-        buf->state = ATOMIC_INIT;
+        atomic_store_explicit(&buf->state, ATOMIC_INIT, memory_order_release);
         return 1;
     }
 }
