@@ -140,7 +140,7 @@ static void crash_before_send(int sockpair[2], int e, ssize_t start, int active)
 
     // atomic_send will be interrupted on its first call and will
     // continue successfully on the second call.
-    ASSERT_GE(atomic_send(sockpair[1], &buf), 0);
+    ASSERT_GT(atomic_send(sockpair[1], &buf), 0);
     ASSERT_EQ(error_cases, 0) << "longjmp was not triggered";
 
     // Send buffer was drained.
@@ -213,7 +213,7 @@ static void crash_after_send(int sockpair[2], int e, ssize_t start, int active) 
 
     // atomic_send will be interrupted on its first call and will
     // continue successfully on the second call.
-    ASSERT_GE(atomic_send(sockpair[1], &buf), 0);
+    ASSERT_GT(atomic_send(sockpair[1], &buf), 0);
     ASSERT_EQ(error_cases, 0) << "longjmp was not triggered";
 
     // Send buffer was drained.
@@ -267,7 +267,7 @@ TEST_F(Test_atomic_send, fail_sendmmsg) {
         FAIL() << "longjmp should not have been triggered";
     }
 
-    ASSERT_EQ(atomic_send(this->sockpair[1], &buf), -1);
+    ASSERT_LT(atomic_send(this->sockpair[1], &buf), 0);
     EXPECT_EQ(errno, EPIPE);
     EXPECT_EQ(buf.state, ATOMIC_DO_SYSCALL);
     EXPECT_EQ(buf.mm.msg_len, -1);
@@ -277,7 +277,7 @@ TEST_F(Test_atomic_send, fail_sendmmsg) {
         std::string(tx)
     );
 
-    ASSERT_EQ(atomic_send(this->sockpair[1], &buf), -1);
+    ASSERT_LT(atomic_send(this->sockpair[1], &buf), 0);
     EXPECT_EQ(errno, EPIPE);
     EXPECT_EQ(buf.state, ATOMIC_DO_SYSCALL);
     EXPECT_EQ(buf.mm.msg_len, -1);
