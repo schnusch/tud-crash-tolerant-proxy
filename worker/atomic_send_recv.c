@@ -6,46 +6,122 @@
 #include "../common/util.h"
 #include "../libcrash/libcrash.h"
 
-void double_buffer_append(struct double_buffer *buf, const char *tail, size_t size) {
-    if(size > sizeof(ACTIVE_BUFFER(buf)->buf) - ACTIVE_BUFFER(buf)->used) {
-        size = sizeof(ACTIVE_BUFFER(buf)->buf) - ACTIVE_BUFFER(buf)->used;
+void atomic_ring_buffer_append(struct atomic_ring_buffer *buf, const char *tail, size_t size) {
+    if(size > sizeof(buf->buf) - ACTIVE_RANGE(buf)->len) {
+        size = sizeof(buf->buf) - ACTIVE_RANGE(buf)->len;
     }
+    const size_t end = ACTIVE_RANGE(buf)->start - ACTIVE_RANGE(buf)->len;
+    const size_t space_after = sizeof(buf->buf) - end;
     memcpy(
-        buf->buffers[!buf->active].buf,
-        ACTIVE_BUFFER(buf)->buf,
-        ACTIVE_BUFFER(buf)->used
-    );
-    memcpy(
-        buf->buffers[!buf->active].buf + ACTIVE_BUFFER(buf)->used,
+        buf->buf + end,
         tail,
-        size
+        size > space_after ? space_after : size
     );
-    buf->buffers[!buf->active].used = ACTIVE_BUFFER(buf)->used + size;
-    LIBCRASH_HOOK(double_buffer_append(buf, !!buf->active));
-    atomic_store_explicit(&buf->active, !buf->active, memory_order_release);
-}
-
-void double_buffer_lshift(struct double_buffer *buf, size_t size) {
-    // If the data was shifted inside a single buffer and the memmove would
-    // be interupted, that data would be corrupted. Instead the A/B buffers
-    // are used and the data is copied from the active to to the inactive
-    // buffer and only after that completed is the active buffer swapped.
-    if(size >= ACTIVE_BUFFER(buf)->used) {
-        buf->buffers[!buf->active].used = 0;
-    } else {
+    if(size > space_after) {
         memcpy(
-            buf->buffers[!buf->active].buf,
-            ACTIVE_BUFFER(buf)->buf + size,
-            ACTIVE_BUFFER(buf)->used - size
+            buf->buf,
+            tail + space_after,
+            size - space_after
         );
-        buf->buffers[!buf->active].used = ACTIVE_BUFFER(buf)->used - size;
     }
-    LIBCRASH_HOOK(double_buffer_lshift(buf, !!buf->active));
+    buf->ranges[!buf->active].start = ACTIVE_RANGE(buf)->start;
+    buf->ranges[!buf->active].len = ACTIVE_RANGE(buf)->len + size;
+    LIBCRASH_HOOK(atomic_ring_buffer_append(buf, !!buf->active));
     atomic_store_explicit(&buf->active, !buf->active, memory_order_release);
 }
 
-int atomic_send(int fd, struct double_buffer *buf) {
-    struct iovec io;
+void atomic_ring_buffer_ltrim(struct atomic_ring_buffer *buf, size_t size) {
+    if(size >= ACTIVE_RANGE(buf)->len) {
+        buf->ranges[!buf->active].start = 0;
+        buf->ranges[!buf->active].len = 0;
+    } else {
+        buf->ranges[!buf->active].start = (ACTIVE_RANGE(buf)->start + size) % sizeof(buf->buf);
+        buf->ranges[!buf->active].len = ACTIVE_RANGE(buf)->len - size;
+    }
+    LIBCRASH_HOOK(atomic_ring_buffer_ltrim(buf, !!buf->active));
+    atomic_store_explicit(&buf->active, !buf->active, memory_order_release);
+}
+
+/**
+ * Initialize one or two `struct iovec` pointing to the parts of the
+ * `atomic_ring_buffer::buffer` occupied by the currently active range.
+ * \return `msghdr::msg_iovlen`
+ */
+size_t set_iovec_used(struct iovec iov[2], struct atomic_ring_buffer *buf) {
+    struct iovec *pv = iov;
+    const size_t end = ACTIVE_RANGE(buf)->start + ACTIVE_RANGE(buf)->len;
+    if(end <= sizeof(buf->buf)) {
+        // [            |============|            ]
+        //               iov[0]
+        *pv++ = (struct iovec){
+            .iov_base = buf->buf + ACTIVE_RANGE(buf)->start,
+            .iov_len = ACTIVE_RANGE(buf)->len,
+        };
+    } else {
+        // [============|            |============]
+        //  iov[1]          unused    iov[0]
+        size_t const until_end = sizeof(buf->buf) - ACTIVE_RANGE(buf)->start;
+        *pv++ = (struct iovec){
+            .iov_base = buf->buf + ACTIVE_RANGE(buf)->start,
+            .iov_len = until_end,
+        };
+        *pv++ = (struct iovec){
+            .iov_base = buf->buf,
+            .iov_len = ACTIVE_RANGE(buf)->len - until_end,
+        };
+    }
+    return pv - iov;
+}
+
+/**
+ * Initialize one or two `struct iovec` pointing to the parts of the
+ * `atomic_ring_buffer::buffer` not occupied by the currently active range.
+ * \return `msghdr::msg_iovlen`
+ */
+size_t set_iovec_unused(struct iovec iov[2], struct atomic_ring_buffer *buf) {
+    struct iovec *pv = iov;
+    if(ACTIVE_RANGE(buf)->len == 0) {
+        ACTIVE_RANGE(buf)->start = 0;
+    }
+    // Point the iovecs to the buffer before and after the currently used
+    // range.
+    const size_t end = ACTIVE_RANGE(buf)->start + ACTIVE_RANGE(buf)->len;
+    if(ACTIVE_RANGE(buf)->start == 0) {
+        // [============|                         ]
+        //      used     iov[0]
+        *pv++ = (struct iovec){
+            .iov_base = buf->buf + ACTIVE_RANGE(buf)->len,
+            .iov_len = sizeof(buf->buf) - ACTIVE_RANGE(buf)->len,
+        };
+    } else if(end >= sizeof(buf->buf)) {
+        // [==|                        |==========]
+        //     iov[0]                       used
+        const size_t skip = end - sizeof(buf->buf);
+        *pv++ = (struct iovec){
+            .iov_base = buf->buf + skip,
+            .iov_len = ACTIVE_RANGE(buf)->start - skip,
+        };
+    } else {
+        // [            |============|            ]
+        //  iov[1]           used     iov[0]
+        *pv++ = (struct iovec){
+            .iov_base = buf->buf + end,
+            .iov_len = sizeof(buf->buf) - end,
+        };
+        *pv++ = (struct iovec){
+            .iov_base = buf->buf,
+            .iov_len = ACTIVE_RANGE(buf)->start,
+        };
+    }
+    return pv - iov;
+}
+
+int atomic_send(int fd, struct atomic_ring_buffer *buf) {
+    if(ACTIVE_RANGE(buf)->len == 0) {
+        return 0;
+    }
+
+    struct iovec iov[2];
     switch(buf->state) {
     default:
     case ATOMIC_INIT:
@@ -53,7 +129,7 @@ int atomic_send(int fd, struct double_buffer *buf) {
         // So as long as `state == ATOMIC_DO_SYSCALL && mm.msg_len == -1`
         // sendmmsg did not complete.
         _Static_assert(
-            (unsigned int)-1 > sizeof(ACTIVE_BUFFER(buf)->buf),
+            (unsigned int)-1 > sizeof(buf->buf),
             "sentinel value cannot be returned by sendmmsg"
         );
         buf->mm.msg_len = -1;
@@ -61,16 +137,11 @@ int atomic_send(int fd, struct double_buffer *buf) {
         atomic_store_explicit(&buf->state, ATOMIC_DO_SYSCALL, memory_order_release);
         __attribute__((fallthrough));
     case ATOMIC_DO_SYSCALL:
-        // Pointers might be inconsistent.
-        buf->mm.msg_hdr = (struct msghdr){
-            .msg_iov = &io,
-            .msg_iovlen = 1,
-        };
-        io = (struct iovec){
-            .iov_base = ACTIVE_BUFFER(buf)->buf,
-            .iov_len = ACTIVE_BUFFER(buf)->used,
-        };
         if(buf->mm.msg_len == (unsigned int)-1) {
+            buf->mm.msg_hdr = (struct msghdr){
+                .msg_iov = iov,
+                .msg_iovlen = set_iovec_used(iov, buf),
+            };
             LIBCRASH_HOOK(atomic_send_sendmmsg_pre(fd, buf));
             int rc = sendmmsg(fd, &buf->mm, 1, MSG_DONTWAIT);
             LIBCRASH_HOOK(atomic_send_sendmmsg_post(fd, buf, rc));
@@ -95,25 +166,26 @@ int atomic_send(int fd, struct double_buffer *buf) {
     case ATOMIC_SWAP_0to1:
             buf->active = 0;
         }
-        double_buffer_lshift(buf, buf->mm.msg_len);
+        atomic_ring_buffer_ltrim(buf, buf->mm.msg_len);
         atomic_store_explicit(&buf->state, ATOMIC_INIT, memory_order_release);
         return 0;
     }
 }
 
-int atomic_recv(int fd, struct double_buffer *buf) {
-    struct iovec io;
+int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
+    struct iovec iov[2];
     switch(buf->state) {
     default:
     case ATOMIC_INIT:
-        if(ACTIVE_BUFFER(buf)->used == sizeof(ACTIVE_BUFFER(buf)->buf)) {
-            return 0;
+        if(ACTIVE_RANGE(buf)->len >= sizeof(buf->buf)) {
+            errno = EOVERFLOW;
+            return -1;
         }
         // The following value will be overwritten once sendmmsg returned.
         // So as long as `state == ATOMIC_DO_SYSCALL && mm.msg_len == -1`
         // recvmmsg did not complete.
         _Static_assert(
-            (unsigned int)-1 > sizeof(ACTIVE_BUFFER(buf)->buf),
+            (unsigned int)-1 > sizeof(buf->buf),
             "sentinel value cannot be returned by recvmmsg"
         );
         buf->mm.msg_len = -1;
@@ -121,20 +193,11 @@ int atomic_recv(int fd, struct double_buffer *buf) {
         atomic_store_explicit(&buf->state, ATOMIC_DO_SYSCALL, memory_order_release);
         __attribute__((fallthrough));
     case ATOMIC_DO_SYSCALL:
-        if(sizeof(ACTIVE_BUFFER(buf)->buf) < ACTIVE_BUFFER(buf)->used) {
-            errno = EOVERFLOW;
-            return -1;
-        }
-        // Pointers might be inconsistent.
-        buf->mm.msg_hdr = (struct msghdr){
-            .msg_iov = &io,
-            .msg_iovlen = 1,
-        };
-        io = (struct iovec){
-            .iov_base = ACTIVE_BUFFER(buf)->buf + ACTIVE_BUFFER(buf)->used,
-            .iov_len = sizeof(ACTIVE_BUFFER(buf)->buf) - ACTIVE_BUFFER(buf)->used,
-        };
         if(buf->mm.msg_len == (unsigned int)-1) {
+            buf->mm.msg_hdr = (struct msghdr){
+                .msg_iov = iov,
+                .msg_iovlen = set_iovec_unused(iov, buf),
+            };
             LIBCRASH_HOOK(atomic_recv_recvmmsg_pre(fd, buf));
             int rc = recvmmsg(fd, &buf->mm, 1, MSG_DONTWAIT, NULL);
             LIBCRASH_HOOK(atomic_recv_recvmmsg_post(fd, buf, rc));
@@ -164,11 +227,9 @@ int atomic_recv(int fd, struct double_buffer *buf) {
     case ATOMIC_SWAP_0to1:
             buf->active = 0;
         }
-        double_buffer_append(
-            buf,
-            ACTIVE_BUFFER(buf)->buf + ACTIVE_BUFFER(buf)->used,
-            buf->mm.msg_len
-        );
+        buf->ranges[!buf->active].len = ACTIVE_RANGE(buf)->len + buf->mm.msg_len;
+        LIBCRASH_HOOK(atomic_ring_buffer_append(buf, !!buf->active));
+        buf->active = !buf->active;
         atomic_store_explicit(&buf->state, ATOMIC_INIT, memory_order_release);
         return 1;
     }
