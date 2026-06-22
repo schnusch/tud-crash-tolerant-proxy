@@ -12,8 +12,8 @@
 enum {
     ATOMIC_INIT = 0,
     ATOMIC_DO_SYSCALL,
-    ATOMIC_MEMCPY_0to1,
-    ATOMIC_MEMCPY_1to0,
+    ATOMIC_SWAP_0to1,
+    ATOMIC_SWAP_1to0,
     ATOMIC_RECV_EOF,
 };
 
