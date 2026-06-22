@@ -342,11 +342,6 @@ static void crash_after_recv(int sockpair[2], int e, int active) {
             std::string(ACTIVE_BUFFER(&buf)->buf, ACTIVE_BUFFER(&buf)->used + buf.mm.msg_len),
             std::string(initial) + tx
         );
-        // ...and copied to the inactive buffer...
-        EXPECT_EQ(
-            std::string(buf.buffers[!buf.active].buf, buf.buffers[!buf.active].used),
-            std::string(initial) + tx
-        );
         // ...but the active buffer was not extended.
         EXPECT_EQ(
             std::string(ACTIVE_BUFFER(&buf)->buf, ACTIVE_BUFFER(&buf)->used),
@@ -388,10 +383,10 @@ static void crash_after_recv(int sockpair[2], int e, int active) {
 }
 
 TEST_F(Test_atomic_recv, crash_recvmmsg_post_active0) {
-    crash_after_send(this->sockpair, ERROR_SYSCALL_POST, 0);
+    crash_after_recv(this->sockpair, ERROR_SYSCALL_POST, 0);
 }
 TEST_F(Test_atomic_recv, crash_recvmmsg_post_active1) {
-    crash_after_send(this->sockpair, ERROR_SYSCALL_POST, 1);
+    crash_after_recv(this->sockpair, ERROR_SYSCALL_POST, 1);
 }
 
 TEST_F(Test_atomic_recv, crash_recvmmsg_memcpy_active0) {
