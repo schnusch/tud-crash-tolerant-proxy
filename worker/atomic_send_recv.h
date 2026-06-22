@@ -17,49 +17,67 @@ enum {
     ATOMIC_RECV_EOF,
 };
 
-struct double_buffer {
+struct atomic_ring_buffer {
     /**
      * State machine around `sendmmsg(2)` and `recvmmsg(2)`.
      */
     atomic_int state;
+    /**
+     * Struct `sendmmsg(2)` and `recvmmsg(2)` operate on.
+     */
     struct mmsghdr mm;
     /**
-     * Index of `double_buffer::buffers`.
+     * Index of `atomic_ring_buffer::ranges`.
      */
     atomic_bool active;
     /**
-     * Every operation takes places on the inactive buffer and after it
-     * completes the active and inactive buffer are swapped.
+     * Operation take place on the same buffer but on the inactive range. Only
+     * after the operation completes the active and inactive ranges are swapped.
      */
     struct {
-        size_t used;
-        char buf[8192];
-    } buffers[2];
+        size_t start;
+        size_t len;
+    } ranges[2];
+    /**
+     * Buffer shared by the two `atomic_ring_buffer::ranges`.
+     */
+    char buf[8192];
 };
 
-#define DOUBLE_BUFFER_INIT \
-    ((const struct double_buffer){ \
+#define ATOMIC_RING_BUFFER_INIT \
+    ((const struct atomic_ring_buffer){ \
         .state = ATOMIC_INIT, \
         .active = 0, \
-        .buffers = { \
-            { .used = 0 }, \
-            { .used = 0 }, \
+        .ranges = { \
+            { .start = 0, .len = 0 }, \
+            { .start = 0, .len = 0 }, \
         }, \
     })
 
-#define ACTIVE_BUFFER(b) (&(b)->buffers[!!(b)->active])
+#define ACTIVE_RANGE(b) (&(b)->ranges[!!(b)->active])
 
-void double_buffer_append(struct double_buffer *buf, const char *tail, size_t size);
+/**
+ * Append `size` bytes from `tail` to `buf`. If there are less than `size` free
+ * bytes in `buf`, `tail` is only copied partially.
+ */
+void atomic_ring_buffer_append(struct atomic_ring_buffer *buf, const char *tail, size_t size);
 
-void double_buffer_lshift(struct double_buffer *buf, size_t size);
+/**
+ * Drop the first `size` bytes from the ring buffer.
+ */
+void atomic_ring_buffer_ltrim(struct atomic_ring_buffer *buf, size_t size);
 
-int atomic_send(int fd, struct double_buffer *buf);
+/**
+ * \return -1 on error
+ * \return 0 on success
+ */
+int atomic_send(int fd, struct atomic_ring_buffer *buf);
 
 /**
  * \return -1 on error
  * \return 0 on EOF
  * \return 1 regardless of how much data was received
  */
-int atomic_recv(int fd, struct double_buffer *buf);
+int atomic_recv(int fd, struct atomic_ring_buffer *buf);
 
 #endif

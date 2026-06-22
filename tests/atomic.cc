@@ -2,9 +2,10 @@
 
 extern "C" {
 #include <errno.h>
+#include <netinet/ip.h>
 #include <setjmp.h>
 #include <signal.h>
-#include "../common/util.h"
+#include <sys/socket.h>
 #include "../libcrash/libcrash.h"
 #include "../worker/atomic_send_recv.h"
 }
@@ -19,43 +20,43 @@ enum {
 static int error_cases;
 
 extern "C" {
-    void libcrash_atomic_send_prepare(int fd, struct double_buffer *buf) {
+    void libcrash_atomic_send_prepare(int fd, struct atomic_ring_buffer *buf) {
         if(error_cases & ERROR_PREPARE) {
             longjmp(jmp, ERROR_PREPARE);
         }
     }
-    void libcrash_atomic_send_sendmmsg_pre(int fd, struct double_buffer *buf) {
+    void libcrash_atomic_send_sendmmsg_pre(int fd, struct atomic_ring_buffer *buf) {
         if(error_cases & ERROR_SYSCALL_PRE) {
             longjmp(jmp, ERROR_SYSCALL_PRE);
         }
     }
-    void libcrash_atomic_send_sendmmsg_post(int fd, struct double_buffer *buf, int rc) {
+    void libcrash_atomic_send_sendmmsg_post(int fd, struct atomic_ring_buffer *buf, int rc) {
         if(error_cases & ERROR_SYSCALL_POST) {
             longjmp(jmp, ERROR_SYSCALL_POST);
         }
     }
-    void libcrash_double_buffer_lshift(struct double_buffer *buf, size_t active) {
+    void libcrash_atomic_ring_buffer_ltrim(struct atomic_ring_buffer *buf, size_t active) {
         if(error_cases & ERROR_MEMCPY) {
             longjmp(jmp, ERROR_MEMCPY);
         }
     }
 
-    void libcrash_atomic_recv_prepare(int fd, struct double_buffer *buf) {
+    void libcrash_atomic_recv_prepare(int fd, struct atomic_ring_buffer *buf) {
         if(error_cases & ERROR_PREPARE) {
             longjmp(jmp, ERROR_PREPARE);
         }
     }
-    void libcrash_atomic_recv_recvmmsg_pre(int fd, struct double_buffer *buf) {
+    void libcrash_atomic_recv_recvmmsg_pre(int fd, struct atomic_ring_buffer *buf) {
         if(error_cases & ERROR_SYSCALL_PRE) {
             longjmp(jmp, ERROR_SYSCALL_PRE);
         }
     }
-    void libcrash_atomic_recv_recvmmsg_post(int fd, struct double_buffer *buf, int rc) {
+    void libcrash_atomic_recv_recvmmsg_post(int fd, struct atomic_ring_buffer *buf, int rc) {
         if(error_cases & ERROR_SYSCALL_POST) {
             longjmp(jmp, ERROR_SYSCALL_POST);
         }
     }
-    void libcrash_double_buffer_append(struct double_buffer *buf, size_t active) {
+    void libcrash_atomic_ring_buffer_append(struct atomic_ring_buffer *buf, size_t active) {
         if(error_cases & ERROR_MEMCPY) {
             longjmp(jmp, ERROR_MEMCPY);
         }
@@ -80,13 +81,40 @@ protected:
 
 class Test_atomic_send : public Test_atomic { };
 
-static void crash_before_send(int sockpair[2], int e, int active) {
+static std::string string_from_ringbuffer(struct atomic_ring_buffer *buf, size_t more) {
+    const size_t end = ACTIVE_RANGE(buf)->start + ACTIVE_RANGE(buf)->len + more;
+    if(end < sizeof(buf->buf)) {
+        return std::string(buf->buf + ACTIVE_RANGE(buf)->start, ACTIVE_RANGE(buf)->len + more);
+    } else {
+        const size_t until_end = sizeof(buf->buf) - ACTIVE_RANGE(buf)->start;
+        return (
+            std::string(buf->buf + ACTIVE_RANGE(buf)->start, until_end)
+            + std::string(buf->buf, ACTIVE_RANGE(buf)->len + more - until_end)
+        );
+    }
+}
+
+static void init_ringbuf(struct atomic_ring_buffer *buf, ssize_t start, const char *data, size_t n) {
+    ASSERT_LE(n, sizeof(buf->buf));
+    if(start < 0) {
+        start = sizeof(buf->buf) - n + start;
+    }
+    ASSERT_LT(start, sizeof(buf->buf));
+    ACTIVE_RANGE(buf)->start = start;
+    ACTIVE_RANGE(buf)->len = 0;
+    atomic_ring_buffer_append(buf, data, n);
+    ASSERT_EQ(ACTIVE_RANGE(buf)->start, start);
+    ASSERT_EQ(ACTIVE_RANGE(buf)->len, n);
+    ASSERT_EQ(string_from_ringbuffer(buf, 0), std::string(data, n));
+}
+
+static void crash_before_send(int sockpair[2], int e, ssize_t start, int active) {
     static const char tx[] = "TODO crash_before_send";
     char rx[4096];
 
-    struct double_buffer buf = DOUBLE_BUFFER_INIT;
+    struct atomic_ring_buffer buf = ATOMIC_RING_BUFFER_INIT;
     buf.active = !!active;
-    ACTIVE_BUFFER(&buf)->used = strlcpy(ACTIVE_BUFFER(&buf)->buf, tx, sizeof(ACTIVE_BUFFER(&buf)->buf));
+    init_ringbuf(&buf, start, tx, strlen(tx));
 
     int occured_error = setjmp(jmp);
     if(occured_error == 0) {
@@ -102,7 +130,7 @@ static void crash_before_send(int sockpair[2], int e, int active) {
         // Send buffer did not change.
         EXPECT_EQ(buf.mm.msg_len, (unsigned int)-1);
         EXPECT_EQ(
-            std::string(ACTIVE_BUFFER(&buf)->buf, ACTIVE_BUFFER(&buf)->used),
+            string_from_ringbuffer(&buf, 0),
             std::string(tx)
         );
 
@@ -116,7 +144,7 @@ static void crash_before_send(int sockpair[2], int e, int active) {
     ASSERT_EQ(error_cases, 0) << "longjmp was not triggered";
 
     // Send buffer was drained.
-    EXPECT_EQ(ACTIVE_BUFFER(&buf)->used, 0);
+    EXPECT_EQ(ACTIVE_RANGE(&buf)->len, 0);
 
     // Data sent completely.
     ssize_t n;
@@ -125,27 +153,39 @@ static void crash_before_send(int sockpair[2], int e, int active) {
     ASSERT_STREQ(rx, tx);
 }
 
-TEST_F(Test_atomic_send, crash_prepare_active0) {
-    crash_before_send(this->sockpair, ERROR_PREPARE, 0);
+TEST_F(Test_atomic_send, crash_prepare_simple0) {
+    crash_before_send(this->sockpair, ERROR_PREPARE, 32, 0);
 }
-TEST_F(Test_atomic_send, crash_prepare_active1) {
-    crash_before_send(this->sockpair, ERROR_PREPARE, 1);
+TEST_F(Test_atomic_send, crash_prepare_simple1) {
+    crash_before_send(this->sockpair, ERROR_PREPARE, 32, 1);
+}
+TEST_F(Test_atomic_send, crash_prepare_wrapped0) {
+    crash_before_send(this->sockpair, ERROR_PREPARE, 8190, 0);
+}
+TEST_F(Test_atomic_send, crash_prepare_wrapped1) {
+    crash_before_send(this->sockpair, ERROR_PREPARE, 8190, 1);
 }
 
-TEST_F(Test_atomic_send, crash_sendmmsg_pre_active0) {
-    crash_before_send(this->sockpair, ERROR_SYSCALL_PRE, 0);
+TEST_F(Test_atomic_send, crash_sendmmsg_pre_simple0) {
+    crash_before_send(this->sockpair, ERROR_SYSCALL_PRE, 0, 0);
 }
-TEST_F(Test_atomic_send, crash_sendmmsg_pre_active1) {
-    crash_before_send(this->sockpair, ERROR_SYSCALL_PRE, 1);
+TEST_F(Test_atomic_send, crash_sendmmsg_pre_simple1) {
+    crash_before_send(this->sockpair, ERROR_SYSCALL_PRE, 0, 1);
+}
+TEST_F(Test_atomic_send, crash_sendmmsg_pre_wrapped0) {
+    crash_before_send(this->sockpair, ERROR_SYSCALL_PRE, 8190, 0);
+}
+TEST_F(Test_atomic_send, crash_sendmmsg_pre_wrapped1) {
+    crash_before_send(this->sockpair, ERROR_SYSCALL_PRE, 8190, 1);
 }
 
-static void crash_after_send(int sockpair[2], int e, int active) {
+static void crash_after_send(int sockpair[2], int e, ssize_t start, int active) {
     static const char tx[] = "TODO crash_after_send";
     char rx[4096];
 
-    struct double_buffer buf = DOUBLE_BUFFER_INIT;
+    struct atomic_ring_buffer buf = ATOMIC_RING_BUFFER_INIT;
     buf.active = !!active;
-    ACTIVE_BUFFER(&buf)->used = strlcpy(ACTIVE_BUFFER(&buf)->buf, tx, sizeof(ACTIVE_BUFFER(&buf)->buf));
+    init_ringbuf(&buf, start, tx, strlen(tx));
 
     int occured_error = setjmp(jmp);
     if(occured_error == 0) {
@@ -163,7 +203,7 @@ static void crash_after_send(int sockpair[2], int e, int active) {
         // Send buffer did not change.
         EXPECT_NE(buf.mm.msg_len, (unsigned int)-1);
         EXPECT_EQ(
-            std::string(ACTIVE_BUFFER(&buf)->buf, ACTIVE_BUFFER(&buf)->used),
+            string_from_ringbuffer(&buf, 0),
             std::string(tx)
         );
 
@@ -177,33 +217,45 @@ static void crash_after_send(int sockpair[2], int e, int active) {
     ASSERT_EQ(error_cases, 0) << "longjmp was not triggered";
 
     // Send buffer was drained.
-    EXPECT_EQ(ACTIVE_BUFFER(&buf)->used, 0);
+    EXPECT_EQ(ACTIVE_RANGE(&buf)->len, 0);
 
     // Ensure no data was sent on the second call.
     ASSERT_EQ(recv(sockpair[0], rx, sizeof(rx), MSG_DONTWAIT), -1);
     ASSERT_EQ(errno, EWOULDBLOCK);
 }
 
-TEST_F(Test_atomic_send, crash_sendmmsg_post_active0) {
-    crash_after_send(this->sockpair, ERROR_SYSCALL_POST, 0);
+TEST_F(Test_atomic_send, crash_sendmmsg_post_simple0) {
+    crash_after_send(this->sockpair, ERROR_SYSCALL_POST, 0, 0);
 }
-TEST_F(Test_atomic_send, crash_sendmmsg_post_active1) {
-    crash_after_send(this->sockpair, ERROR_SYSCALL_POST, 1);
+TEST_F(Test_atomic_send, crash_sendmmsg_post_simple1) {
+    crash_after_send(this->sockpair, ERROR_SYSCALL_POST, 0, 1);
+}
+TEST_F(Test_atomic_send, crash_sendmmsg_post_wrapped0) {
+    crash_after_send(this->sockpair, ERROR_SYSCALL_POST, 8190, 0);
+}
+TEST_F(Test_atomic_send, crash_sendmmsg_post_wrapped1) {
+    crash_after_send(this->sockpair, ERROR_SYSCALL_POST, 8190, 1);
 }
 
-TEST_F(Test_atomic_send, crash_sendmmsg_memcpy_active0) {
-    crash_after_send(this->sockpair, ERROR_MEMCPY, 0);
+TEST_F(Test_atomic_send, crash_sendmmsg_memcpy_simple0) {
+    crash_after_send(this->sockpair, ERROR_MEMCPY, 0, 0);
 }
-TEST_F(Test_atomic_send, crash_sendmmsg_memcpy_active1) {
-    crash_after_send(this->sockpair, ERROR_MEMCPY, 1);
+TEST_F(Test_atomic_send, crash_sendmmsg_memcpy_simple1) {
+    crash_after_send(this->sockpair, ERROR_MEMCPY, 0, 1);
+}
+TEST_F(Test_atomic_send, crash_sendmmsg_memcpy_wrapped0) {
+    crash_after_send(this->sockpair, ERROR_MEMCPY, 8190, 0);
+}
+TEST_F(Test_atomic_send, crash_sendmmsg_memcpy_wrapped1) {
+    crash_after_send(this->sockpair, ERROR_MEMCPY, 8190, 1);
 }
 
 TEST_F(Test_atomic_send, fail_sendmmsg) {
     static const char tx[] = "TODO fail_sendmmsg";
     char rx[4096];
 
-    struct double_buffer buf = DOUBLE_BUFFER_INIT;
-    ACTIVE_BUFFER(&buf)->used = strlcpy(ACTIVE_BUFFER(&buf)->buf, tx, sizeof(buf.buffers[buf.active].buf));
+    struct atomic_ring_buffer buf = ATOMIC_RING_BUFFER_INIT;
+    init_ringbuf(&buf, 0, tx, strlen(tx));
 
     ASSERT_EQ(close(this->sockpair[0]), 0);
     this->sockpair[0] = -1;
@@ -221,7 +273,7 @@ TEST_F(Test_atomic_send, fail_sendmmsg) {
     EXPECT_EQ(buf.mm.msg_len, -1);
     // Send buffer did not change.
     EXPECT_EQ(
-        std::string(ACTIVE_BUFFER(&buf)->buf, ACTIVE_BUFFER(&buf)->used),
+        string_from_ringbuffer(&buf, 0),
         std::string(tx)
     );
 
@@ -231,22 +283,21 @@ TEST_F(Test_atomic_send, fail_sendmmsg) {
     EXPECT_EQ(buf.mm.msg_len, -1);
     // Send buffer did not change.
     EXPECT_EQ(
-        std::string(ACTIVE_BUFFER(&buf)->buf, ACTIVE_BUFFER(&buf)->used),
+        string_from_ringbuffer(&buf, 0),
         std::string(tx)
     );
 }
 
 class Test_atomic_recv : public Test_atomic { };
 
-static void crash_before_recv(int sockpair[2], int e, int active) {
+static void crash_before_recv(int sockpair[2], int e, ssize_t start, int active) {
     static const char initial[] = "TODO initial";
     static const char tx[] = "TODO crash_after_recv";
     char rx[4096];
 
-    struct double_buffer buf = DOUBLE_BUFFER_INIT;
+    struct atomic_ring_buffer buf = ATOMIC_RING_BUFFER_INIT;
     buf.active = !!active;
-    // Add initial data to the buffer.
-    ACTIVE_BUFFER(&buf)->used = strlcpy(ACTIVE_BUFFER(&buf)->buf, initial, sizeof(ACTIVE_BUFFER(&buf)->buf));
+    init_ringbuf(&buf, start, initial, strlen(initial));
 
     // Send data to the socket.
     ASSERT_EQ(send(sockpair[1], tx, strlen(tx), MSG_DONTWAIT), strlen(tx));
@@ -263,10 +314,10 @@ static void crash_before_recv(int sockpair[2], int e, int active) {
 
         // Receive buffer is still empty.
         EXPECT_EQ(buf.mm.msg_len, (unsigned int)-1);
-        EXPECT_EQ(ACTIVE_BUFFER(&buf)->used, strlen(initial));
+        EXPECT_EQ(ACTIVE_RANGE(&buf)->len, strlen(initial));
 
         // Ensure no data was read at this point.
-        EXPECT_EQ(recv(sockpair[0], rx, sizeof(rx), MSG_DONTWAIT | MSG_PEEK), strlen(tx));
+        ASSERT_EQ(recv(sockpair[0], rx, sizeof(rx), MSG_DONTWAIT | MSG_PEEK), strlen(tx));
         EXPECT_EQ(std::string(rx, strlen(tx)), std::string(tx));
 
         // Allow atomic_recv to run uninterrupted.
@@ -281,7 +332,7 @@ static void crash_before_recv(int sockpair[2], int e, int active) {
 
     // Ensure the data was received.
     EXPECT_EQ(
-        std::string(ACTIVE_BUFFER(&buf)->buf, ACTIVE_BUFFER(&buf)->used),
+        string_from_ringbuffer(&buf, 0),
         std::string(initial) + tx
     );
 
@@ -299,29 +350,52 @@ static void crash_before_recv(int sockpair[2], int e, int active) {
     EXPECT_EQ(atomic_recv(sockpair[1], &buf), 0);
 }
 
-TEST_F(Test_atomic_recv, crash_prepare_active0) {
-    crash_before_recv(this->sockpair, ERROR_PREPARE, 0);
+TEST_F(Test_atomic_recv, crash_prepare_after0) {
+    crash_before_recv(this->sockpair, ERROR_PREPARE, 0, 0);
 }
-TEST_F(Test_atomic_recv, crash_prepare_active1) {
-    crash_before_recv(this->sockpair, ERROR_PREPARE, 1);
+TEST_F(Test_atomic_recv, crash_prepare_after1) {
+    crash_before_recv(this->sockpair, ERROR_PREPARE, 0, 1);
+}
+TEST_F(Test_atomic_recv, crash_prepare_wrapping0) {
+    crash_before_recv(this->sockpair, ERROR_PREPARE, -4, 0);
+}
+TEST_F(Test_atomic_recv, crash_prepare_wrapping1) {
+    crash_before_recv(this->sockpair, ERROR_PREPARE, -4, 1);
+}
+TEST_F(Test_atomic_recv, crash_prepare_inbetween0) {
+    crash_before_recv(this->sockpair, ERROR_PREPARE, 8190, 0);
+}
+TEST_F(Test_atomic_recv, crash_prepare_inbetween1) {
+    crash_before_recv(this->sockpair, ERROR_PREPARE, 8190, 1);
 }
 
-TEST_F(Test_atomic_recv, crash_recvmmsg_pre_active0) {
-    crash_before_recv(this->sockpair, ERROR_SYSCALL_PRE, 0);
+TEST_F(Test_atomic_recv, crash_recvmmsg_pre_after0) {
+    crash_before_recv(this->sockpair, ERROR_SYSCALL_PRE, 0, 0);
 }
-TEST_F(Test_atomic_recv, crash_recvmmsg_pre_active1) {
-    crash_before_recv(this->sockpair, ERROR_SYSCALL_PRE, 1);
+TEST_F(Test_atomic_recv, crash_recvmmsg_pre_after1) {
+    crash_before_recv(this->sockpair, ERROR_SYSCALL_PRE, 0, 1);
+}
+TEST_F(Test_atomic_recv, crash_recvmmsg_pre_wrapping0) {
+    crash_before_recv(this->sockpair, ERROR_SYSCALL_PRE, -4, 0);
+}
+TEST_F(Test_atomic_recv, crash_recvmmsg_pre_wrapping1) {
+    crash_before_recv(this->sockpair, ERROR_SYSCALL_PRE, -4, 1);
+}
+TEST_F(Test_atomic_recv, crash_recvmmsg_pre_inbetween0) {
+    crash_before_recv(this->sockpair, ERROR_SYSCALL_PRE, 8190, 0);
+}
+TEST_F(Test_atomic_recv, crash_recvmmsg_pre_inbetween1) {
+    crash_before_recv(this->sockpair, ERROR_SYSCALL_PRE, 8190, 1);
 }
 
-static void crash_after_recv(int sockpair[2], int e, int active) {
+static void crash_after_recv(int sockpair[2], int e, ssize_t start, int active) {
     static const char initial[] = "TODO initial";
     static const char tx[] = "TODO crash_after_recv";
     char rx[4096];
 
-    struct double_buffer buf = DOUBLE_BUFFER_INIT;
+    struct atomic_ring_buffer buf = ATOMIC_RING_BUFFER_INIT;
     buf.active = !!active;
-    // Add initial data to the buffer.
-    ACTIVE_BUFFER(&buf)->used = strlcpy(ACTIVE_BUFFER(&buf)->buf, initial, sizeof(ACTIVE_BUFFER(&buf)->buf));
+    init_ringbuf(&buf, start, initial, strlen(initial));
 
     // Send data to the socket.
     ASSERT_EQ(send(sockpair[1], tx, strlen(tx), MSG_DONTWAIT), strlen(tx));
@@ -339,17 +413,17 @@ static void crash_after_recv(int sockpair[2], int e, int active) {
         // Ensure the data was received...
         ASSERT_NE(buf.mm.msg_len, (unsigned int)-1);
         EXPECT_EQ(
-            std::string(ACTIVE_BUFFER(&buf)->buf, ACTIVE_BUFFER(&buf)->used + buf.mm.msg_len),
+            string_from_ringbuffer(&buf, buf.mm.msg_len),
             std::string(initial) + tx
         );
         // ...but the active buffer was not extended.
         EXPECT_EQ(
-            std::string(ACTIVE_BUFFER(&buf)->buf, ACTIVE_BUFFER(&buf)->used),
+            string_from_ringbuffer(&buf, 0),
             std::string(initial)
         );
 
         // Kernel buffer is empty.
-        EXPECT_EQ(recv(sockpair[1], rx, sizeof(rx), MSG_DONTWAIT | MSG_PEEK), -1);
+        ASSERT_EQ(recv(sockpair[1], rx, sizeof(rx), MSG_DONTWAIT | MSG_PEEK), -1);
         EXPECT_EQ(errno, EWOULDBLOCK);
 
         // Allow atomic_recv to run uninterrupted.
@@ -364,7 +438,7 @@ static void crash_after_recv(int sockpair[2], int e, int active) {
 
     // Ensure the data was received.
     EXPECT_EQ(
-        std::string(ACTIVE_BUFFER(&buf)->buf, ACTIVE_BUFFER(&buf)->used),
+        string_from_ringbuffer(&buf, 0),
         std::string(initial) + tx
     );
 
@@ -382,18 +456,42 @@ static void crash_after_recv(int sockpair[2], int e, int active) {
     EXPECT_EQ(atomic_recv(sockpair[1], &buf), 0);
 }
 
-TEST_F(Test_atomic_recv, crash_recvmmsg_post_active0) {
-    crash_after_recv(this->sockpair, ERROR_SYSCALL_POST, 0);
+TEST_F(Test_atomic_recv, crash_recvmmsg_post_after0) {
+    crash_after_recv(this->sockpair, ERROR_SYSCALL_POST, 0, 0);
 }
-TEST_F(Test_atomic_recv, crash_recvmmsg_post_active1) {
-    crash_after_recv(this->sockpair, ERROR_SYSCALL_POST, 1);
+TEST_F(Test_atomic_recv, crash_recvmmsg_post_after1) {
+    crash_after_recv(this->sockpair, ERROR_SYSCALL_POST, 0, 1);
+}
+TEST_F(Test_atomic_recv, crash_recvmmsg_post_wrapping0) {
+    crash_after_recv(this->sockpair, ERROR_SYSCALL_POST, -4, 0);
+}
+TEST_F(Test_atomic_recv, crash_recvmmsg_post_wrapping1) {
+    crash_after_recv(this->sockpair, ERROR_SYSCALL_POST, -4, 1);
+}
+TEST_F(Test_atomic_recv, crash_recvmmsg_post_inbetween0) {
+    crash_after_recv(this->sockpair, ERROR_SYSCALL_POST, 8190, 0);
+}
+TEST_F(Test_atomic_recv, crash_recvmmsg_post_inbetween1) {
+    crash_after_recv(this->sockpair, ERROR_SYSCALL_POST, 8190, 1);
 }
 
-TEST_F(Test_atomic_recv, crash_recvmmsg_memcpy_active0) {
-    crash_after_recv(this->sockpair, ERROR_MEMCPY, 0);
+TEST_F(Test_atomic_recv, crash_recvmmsg_memcpy_after0) {
+    crash_after_recv(this->sockpair, ERROR_MEMCPY, 0, 0);
 }
-TEST_F(Test_atomic_recv, crash_recvmmsg_memcpy_active1) {
-    crash_after_recv(this->sockpair, ERROR_MEMCPY, 1);
+TEST_F(Test_atomic_recv, crash_recvmmsg_memcpy_after1) {
+    crash_after_recv(this->sockpair, ERROR_MEMCPY, 0, 1);
+}
+TEST_F(Test_atomic_recv, crash_recvmmsg_memcpy_wrapping0) {
+    crash_after_recv(this->sockpair, ERROR_MEMCPY, -4, 0);
+}
+TEST_F(Test_atomic_recv, crash_recvmmsg_memcpy_wrapping1) {
+    crash_after_recv(this->sockpair, ERROR_MEMCPY, -4, 1);
+}
+TEST_F(Test_atomic_recv, crash_recvmmsg_memcpy_inbetween0) {
+    crash_after_recv(this->sockpair, ERROR_MEMCPY, 8190, 0);
+}
+TEST_F(Test_atomic_recv, crash_recvmmsg_memcpy_inbetween1) {
+    crash_after_recv(this->sockpair, ERROR_MEMCPY, 8190, 1);
 }
 
 class Test_atomic_recv_rst : public Test_atomic_recv {
@@ -436,7 +534,7 @@ protected:
 };
 
 TEST_F(Test_atomic_recv_rst, fail_recvmmsg) {
-    struct double_buffer buf = DOUBLE_BUFFER_INIT;
+    struct atomic_ring_buffer buf = ATOMIC_RING_BUFFER_INIT;
 
     // Reset connection.
     struct linger l = {
@@ -459,7 +557,7 @@ TEST_F(Test_atomic_recv_rst, fail_recvmmsg) {
     EXPECT_EQ(buf.state, ATOMIC_DO_SYSCALL);
     EXPECT_EQ(buf.mm.msg_len, -1);
     // Receive buffer did not change.
-    EXPECT_EQ(ACTIVE_BUFFER(&buf)->used, 0);
+    EXPECT_EQ(ACTIVE_RANGE(&buf)->len, 0);
 
     // ECONNRESET is only returned once.
     char rx[4096];
