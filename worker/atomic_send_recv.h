@@ -14,7 +14,6 @@ enum {
     ATOMIC_DO_SYSCALL,
     ATOMIC_SWAP_0to1,
     ATOMIC_SWAP_1to0,
-    ATOMIC_RECV_EOF,
 };
 
 struct atomic_ring_buffer {
@@ -69,14 +68,14 @@ void atomic_ring_buffer_ltrim(struct atomic_ring_buffer *buf, size_t size);
 
 /**
  * \return -1 on error
- * \return 0 on success
+ * \return >0 the number of bytes sent and removed from `buf`
  */
 int atomic_send(int fd, struct atomic_ring_buffer *buf);
 
 /**
  * \return -1 on error
  * \return 0 on EOF
- * \return 1 regardless of how much data was received
+ * \return >0 the number of bytes received and added to `buf`
  */
 int atomic_recv(int fd, struct atomic_ring_buffer *buf);
 

@@ -168,7 +168,7 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
         }
         atomic_ring_buffer_ltrim(buf, buf->mm.msg_len);
         atomic_store_explicit(&buf->state, ATOMIC_INIT, memory_order_release);
-        return 0;
+        return buf->mm.msg_len;
     }
 }
 
@@ -202,6 +202,10 @@ int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
             int rc = recvmmsg(fd, &buf->mm, 1, MSG_DONTWAIT, NULL);
             LIBCRASH_HOOK(atomic_recv_recvmmsg_post(fd, buf, rc));
             if(rc < 0) {
+                // !!! WARNING !!!
+                // If the process were to crash here, the error can get lost.
+                // E.g. ECONNRESET is returned only once, afterwards recv(2)
+                // will signal EOF.
                 return -1;
             }
         }
@@ -212,9 +216,7 @@ int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
         // completed, but the state was not changed yet. This would not be
         // detected and the buffers would be swapped back on the next call.
         if(buf->mm.msg_len == 0) {
-            atomic_store_explicit(&buf->state, ATOMIC_RECV_EOF, memory_order_release);
-            __attribute__((fallthrough));
-    case ATOMIC_RECV_EOF:
+            atomic_store_explicit(&buf->state, ATOMIC_INIT, memory_order_release);
             return 0;
         } else  if(buf->active) {
             atomic_store_explicit(&buf->state, ATOMIC_SWAP_1to0, memory_order_release);
@@ -231,6 +233,6 @@ int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
         LIBCRASH_HOOK(atomic_ring_buffer_append(buf, !!buf->active));
         buf->active = !buf->active;
         atomic_store_explicit(&buf->state, ATOMIC_INIT, memory_order_release);
-        return 1;
+        return buf->mm.msg_len;
     }
 }
