@@ -420,7 +420,8 @@ int array_append(void **array, size_t *len, const void *elem, size_t size) {
         return -1;
     }
     *array = new_array;
-    memcpy(&(*array)[(*len)++], elem, size);
+    memcpy((char *)*array + (*len * size), elem, size);
+    ++(*len);
     return 0;
 }
 
