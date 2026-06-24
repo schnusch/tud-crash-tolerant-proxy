@@ -1,4 +1,3 @@
-#define _GNU_SOURCE // struct mmsghdr
 #include <errno.h>
 #include <string.h>
 
