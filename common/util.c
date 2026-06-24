@@ -1,4 +1,3 @@
-#define _GNU_SOURCE // stpncpy, strdupa
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
