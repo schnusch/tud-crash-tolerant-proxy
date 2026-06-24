@@ -30,7 +30,7 @@ extern "C" {
             longjmp(jmp, ERROR_SYSCALL_PRE);
         }
     }
-    void libcrash_atomic_send_sendmmsg_post(int fd, struct atomic_ring_buffer *buf, int rc) {
+    void libcrash_atomic_send_sendmmsg_post(int fd, struct atomic_ring_buffer *buf, int *rc) {
         if(error_cases & ERROR_SYSCALL_POST) {
             longjmp(jmp, ERROR_SYSCALL_POST);
         }
@@ -51,7 +51,7 @@ extern "C" {
             longjmp(jmp, ERROR_SYSCALL_PRE);
         }
     }
-    void libcrash_atomic_recv_recvmmsg_post(int fd, struct atomic_ring_buffer *buf, int rc) {
+    void libcrash_atomic_recv_recvmmsg_post(int fd, struct atomic_ring_buffer *buf, int *rc) {
         if(error_cases & ERROR_SYSCALL_POST) {
             longjmp(jmp, ERROR_SYSCALL_POST);
         }

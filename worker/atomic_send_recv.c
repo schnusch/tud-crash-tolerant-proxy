@@ -144,7 +144,7 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
             };
             LIBCRASH_HOOK(atomic_send_sendmmsg_pre(fd, buf));
             int rc = sendmmsg(fd, &buf->mm, 1, MSG_DONTWAIT);
-            LIBCRASH_HOOK(atomic_send_sendmmsg_post(fd, buf, rc));
+            LIBCRASH_HOOK(atomic_send_sendmmsg_post(fd, buf, &rc));
             if(rc < 0) {
                 return -1;
             }
@@ -200,7 +200,7 @@ int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
             };
             LIBCRASH_HOOK(atomic_recv_recvmmsg_pre(fd, buf));
             int rc = recvmmsg(fd, &buf->mm, 1, MSG_DONTWAIT, NULL);
-            LIBCRASH_HOOK(atomic_recv_recvmmsg_post(fd, buf, rc));
+            LIBCRASH_HOOK(atomic_recv_recvmmsg_post(fd, buf, &rc));
             if(rc < 0) {
                 // !!! WARNING !!!
                 // If the process were to crash here, the error can get lost.

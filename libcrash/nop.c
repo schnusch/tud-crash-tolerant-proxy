@@ -12,7 +12,7 @@ void libcrash_atomic_send_sendmmsg_pre(int fd, struct atomic_ring_buffer *buf) {
     (void)fd, (void)buf;
 }
 
-void libcrash_atomic_send_sendmmsg_post(int fd, struct atomic_ring_buffer *buf, int rc) {
+void libcrash_atomic_send_sendmmsg_post(int fd, struct atomic_ring_buffer *buf, int *rc) {
     (void)fd, (void)buf, (void)rc;
 }
 
@@ -28,7 +28,7 @@ void libcrash_atomic_recv_recvmmsg_pre(int fd, struct atomic_ring_buffer *buf) {
     (void)fd, (void)buf;
 }
 
-void libcrash_atomic_recv_recvmmsg_post(int fd, struct atomic_ring_buffer *buf, int rc) {
+void libcrash_atomic_recv_recvmmsg_post(int fd, struct atomic_ring_buffer *buf, int *rc) {
     (void)fd, (void)buf, (void)rc;
 }
 
