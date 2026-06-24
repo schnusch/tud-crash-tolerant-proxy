@@ -102,7 +102,7 @@ static void init_ringbuf(struct atomic_ring_buffer *buf, ssize_t start, const ch
     ASSERT_LT(start, sizeof(buf->buf));
     ACTIVE_RANGE(buf)->start = start;
     ACTIVE_RANGE(buf)->len = 0;
-    atomic_ring_buffer_append(buf, data, n);
+    ring_buffer_append(buf->buf, ACTIVE_RANGE(buf), data, n);
     ASSERT_EQ(ACTIVE_RANGE(buf)->start, start);
     ASSERT_EQ(ACTIVE_RANGE(buf)->len, n);
     ASSERT_EQ(string_from_ringbuffer(buf, 0), std::string(data, n));

@@ -6,40 +6,40 @@
 #include "../common/util.h"
 #include "../libcrash/libcrash.h"
 
-void atomic_ring_buffer_append(struct atomic_ring_buffer *buf, const char *tail, size_t size) {
-    if(size > sizeof(buf->buf) - ACTIVE_RANGE(buf)->len) {
-        size = sizeof(buf->buf) - ACTIVE_RANGE(buf)->len;
+void ring_buffer_append(
+    char buf[RING_BUFFER_SIZE],
+    struct ring_buffer_range *range,
+    const char *tail,
+    size_t size
+) {
+    if(size > RING_BUFFER_SIZE - range->len) {
+        size = RING_BUFFER_SIZE - range->len;
     }
-    const size_t end = ACTIVE_RANGE(buf)->start - ACTIVE_RANGE(buf)->len;
-    const size_t space_after = sizeof(buf->buf) - end;
+    const size_t end = range->start - range->len;
+    const size_t space_after = RING_BUFFER_SIZE - end;
     memcpy(
-        buf->buf + end,
+        buf + end,
         tail,
         size > space_after ? space_after : size
     );
     if(size > space_after) {
         memcpy(
-            buf->buf,
+            buf,
             tail + space_after,
             size - space_after
         );
     }
-    buf->ranges[!buf->active].start = ACTIVE_RANGE(buf)->start;
-    buf->ranges[!buf->active].len = ACTIVE_RANGE(buf)->len + size;
-    LIBCRASH_HOOK(atomic_ring_buffer_append(buf, !!buf->active));
-    atomic_store_explicit(&buf->active, !buf->active, memory_order_release);
+    range->len += size;
 }
 
-void atomic_ring_buffer_ltrim(struct atomic_ring_buffer *buf, size_t size) {
-    if(size >= ACTIVE_RANGE(buf)->len) {
-        buf->ranges[!buf->active].start = 0;
-        buf->ranges[!buf->active].len = 0;
+void ring_buffer_ltrim(struct ring_buffer_range *range, size_t size) {
+    if(size >= range->len) {
+        range->start = 0;
+        range->len = 0;
     } else {
-        buf->ranges[!buf->active].start = (ACTIVE_RANGE(buf)->start + size) % sizeof(buf->buf);
-        buf->ranges[!buf->active].len = ACTIVE_RANGE(buf)->len - size;
+        range->start = (range->start + size) % RING_BUFFER_SIZE;
+        range->len -= size;
     }
-    LIBCRASH_HOOK(atomic_ring_buffer_ltrim(buf, !!buf->active));
-    atomic_store_explicit(&buf->active, !buf->active, memory_order_release);
 }
 
 /**
@@ -166,7 +166,11 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
     case ATOMIC_SWAP_0to1:
             buf->active = 0;
         }
-        atomic_ring_buffer_ltrim(buf, buf->mm.msg_len);
+        // Left-trim the sent data on the inactive range, then swap the ranges.
+        buf->ranges[!buf->active] = *ACTIVE_RANGE(buf);
+        ring_buffer_ltrim(&buf->ranges[!buf->active], buf->mm.msg_len);
+        LIBCRASH_HOOK(atomic_ring_buffer_ltrim(buf, !!buf->active));
+        buf->active = !buf->active;
         atomic_store_explicit(&buf->state, ATOMIC_INIT, memory_order_release);
         return buf->mm.msg_len;
     }
@@ -229,7 +233,11 @@ int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
     case ATOMIC_SWAP_0to1:
             buf->active = 0;
         }
-        buf->ranges[!buf->active].len = ACTIVE_RANGE(buf)->len + buf->mm.msg_len;
+        // Extend the inactive range to include the received data.
+        buf->ranges[!buf->active] = (struct ring_buffer_range){
+            .start = ACTIVE_RANGE(buf)->start,
+            .len = ACTIVE_RANGE(buf)->len + buf->mm.msg_len,
+        };
         LIBCRASH_HOOK(atomic_ring_buffer_append(buf, !!buf->active));
         buf->active = !buf->active;
         atomic_store_explicit(&buf->state, ATOMIC_INIT, memory_order_release);

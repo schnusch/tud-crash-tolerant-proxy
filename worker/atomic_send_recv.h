@@ -16,6 +16,13 @@ enum {
     ATOMIC_SWAP_1to0,
 };
 
+struct ring_buffer_range {
+    size_t start;
+    size_t len;
+};
+
+#define RING_BUFFER_SIZE 8192
+
 struct atomic_ring_buffer {
     /**
      * State machine around `sendmmsg(2)` and `recvmmsg(2)`.
@@ -33,14 +40,11 @@ struct atomic_ring_buffer {
      * Operation take place on the same buffer but on the inactive range. Only
      * after the operation completes the active and inactive ranges are swapped.
      */
-    struct {
-        size_t start;
-        size_t len;
-    } ranges[2];
+    struct ring_buffer_range ranges[2];
     /**
      * Buffer shared by the two `atomic_ring_buffer::ranges`.
      */
-    char buf[8192];
+    char buf[RING_BUFFER_SIZE];
 };
 
 #define ATOMIC_RING_BUFFER_INIT \
@@ -59,12 +63,17 @@ struct atomic_ring_buffer {
  * Append `size` bytes from `tail` to `buf`. If there are less than `size` free
  * bytes in `buf`, `tail` is only copied partially.
  */
-void atomic_ring_buffer_append(struct atomic_ring_buffer *buf, const char *tail, size_t size);
+void ring_buffer_append(
+    char buf[RING_BUFFER_SIZE],
+    struct ring_buffer_range *range,
+    const char *tail,
+    size_t size
+);
 
 /**
  * Drop the first `size` bytes from the ring buffer.
  */
-void atomic_ring_buffer_ltrim(struct atomic_ring_buffer *buf, size_t size);
+void ring_buffer_ltrim(struct ring_buffer_range *range, size_t size);
 
 /**
  * \return -1 on error
