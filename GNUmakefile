@@ -23,7 +23,7 @@ final_cflags = $(CFLAGS) $(EXTRA_CFLAGS) -std=c99 -Werror=vla \
 
 # Linker flags
 # Use $(*FLAGS) to replace default flags and $(EXTRA_*FLAGS) to append.
-LDFLAGS =
+LDFLAGS = -Llibcrash/nop -lcrash -Wl,-rpath,'$$ORIGIN/../libcrash/nop'
 EXTRA_LDFLAGS = #-fsanitize=address,undefined
 final_ldflags = $(LDFLAGS) $(EXTRA_LDFLAGS)
 
@@ -39,11 +39,14 @@ WORKER_SRCS = $(shell find worker -xtype f -name '*.c') \
 	thirdparty/picohttpparser/picohttpparser.c
 WORKER_OBJS = $(patsubst %.c,obj/%.o,$(WORKER_SRCS))
 
+MAKE_LIBCRASH_NOP = $(MAKE) -C libcrash CPPFLAGS='$(final_cppflags)' CFLAGS='$(final_cflags)' nop/libcrash.so
+
 # *.o are located in obj/, executables in bin/.
 
 .PHONY: all check clean install
 
 all: bin/listener bin/worker
+	$(MAKE) -C libcrash CPPFLAGS='$(final_cppflags)' CFLAGS='$(final_cflags)' $@
 
 check:
 	$(MAKE) -C tests CPPFLAGS='$(final_cppflags)' $@
@@ -62,10 +65,12 @@ install: bin/listener bin/worker
 	install -Dm 755 bin/worker $(DESTDIR)$(PREFIX)/$(WORKER)
 
 bin/listener: $(LISTENER_OBJS)
+	$(MAKE_LIBCRASH_NOP)
 	@mkdir -p $(@D)
 	$(CC) -o $@ $(LISTENER_OBJS) $(final_ldflags) -lsystemd
 
 bin/worker: $(WORKER_OBJS)
+	$(MAKE_LIBCRASH_NOP)
 	@mkdir -p $(@D)
 	$(CC) -o $@ $(WORKER_OBJS) $(final_ldflags)
 
