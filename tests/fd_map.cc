@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 extern "C" {
+#include "../common/util.h"
 #include "../listener/fd_map.h"
 }
 
@@ -12,7 +13,7 @@ TEST(fd_map, insert_stderr) {
     struct fd_map_entry *e = fd_map_get(&fm, STDERR_FILENO);
     ASSERT_NE(e, nullptr);
 
-    struct fd_map_entry *start = (struct fd_map_entry *)fm.map.addr->data;
+    struct fd_map_entry *start = (struct fd_map_entry *)fm.map.addr->connections;
     struct fd_map_entry *end = (struct fd_map_entry *)((char *)fm.map.addr + fm.map.addr->size);
     EXPECT_EQ(e - start, 2);
     EXPECT_EQ(end - start, 3);
@@ -32,7 +33,7 @@ TEST(fd_map, insert_stderr) {
     ASSERT_NE(e, nullptr);
     e->used = 1;
 
-    start = (struct fd_map_entry *)fm.map.addr->data;
+    start = (struct fd_map_entry *)fm.map.addr->connections;
     end = (struct fd_map_entry *)((char *)fm.map.addr + fm.map.addr->size);
     EXPECT_EQ(e - start, 3);
     EXPECT_EQ(end - start, 4);

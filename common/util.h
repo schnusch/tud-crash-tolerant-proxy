@@ -45,12 +45,10 @@
 ssize_t readall(int fd, void *buf, size_t *size);
 
 /**
- * Write exactly `*size` bytes from `buf` to `fd`, unless an error occurs.
- * The number of bytes actually written is returned in `*size`.
- * \return the number of bytes actually written
- * \return -1 on error
+ * Write exactly all data, unless an error occurs.
+ * \return the number of bytes actually written, if it is less then the sum of all `iov_len` an error occured
  */
-ssize_t writeall(int fd, const void *buf, size_t *size);
+size_t pwritev_all(int fd, const struct iovec *iov, size_t iovcnt, off_t offset);
 
 /**
  * Set or unset `FD_CLOEXEC` on `fd`.

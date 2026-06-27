@@ -18,34 +18,28 @@ struct fd_map_entry *fd_map_get(struct fd_map *map, int fd) {
         return NULL;
     }
 
-    struct fd_map_entry *start = (struct fd_map_entry *)CAST(map)->addr->data;
+    struct fd_map_entry *start = (struct fd_map_entry *)CAST(map)->addr->connections;
     struct fd_map_entry *end = (struct fd_map_entry *)((char *)CAST(map)->addr + CAST(map)->addr->size);
-    assert(((uintptr_t)end - (uintptr_t)start) % sizeof(struct fd_map_entry) == 0);
+    const size_t size = (char *)end - (char *)start;
+    end = (struct fd_map_entry *)(
+        (char *)end - (size % sizeof(struct fd_map_entry))
+    );
 
-    struct fd_map_entry entry = {
-        .used = 0,
-    };
-    while(fd >= end - start) {
-        size_t size = sizeof(entry);
-        if(writeall(CAST(map)->fd, &entry, &size) < 0) {
-            shared_memory_truncate(CAST(map), CAST(map)->addr->size);
+    if(fd >= end - start) {
+        struct fd_map_entry empty = {
+            .used = 0,
+        };
+        if(shared_memory_append(CAST(map), &empty, sizeof(empty), fd + 1 - (end - start)) < 0) {
             return NULL;
         }
-        CAST(map)->addr->size += sizeof(entry);
-        ++end;
+        start = (struct fd_map_entry *)CAST(map)->addr->connections;
     }
 
-    if(shared_memory_resize(CAST(map)) < 0) {
-        shared_memory_truncate(CAST(map), CAST(map)->addr->size - sizeof(entry));
-        return NULL;
-    }
-
-    start = (struct fd_map_entry *)CAST(map)->addr->data;
     return &start[fd];
 }
 
 int fd_map_truncate(struct fd_map *map) {
-    struct fd_map_entry *start = (struct fd_map_entry *)CAST(map)->addr->data;
+    struct fd_map_entry *start = (struct fd_map_entry *)CAST(map)->addr->connections;
     struct fd_map_entry *end = (struct fd_map_entry *)((char *)CAST(map)->addr + CAST(map)->addr->size);
     assert(((uintptr_t)end - (uintptr_t)start) % sizeof(struct fd_map_entry) == 0);
 
@@ -54,7 +48,7 @@ int fd_map_truncate(struct fd_map *map) {
     }
     int r = shared_memory_truncate(CAST(map), (char *)end - (char *)CAST(map)->addr);
 
-    start = (struct fd_map_entry *)CAST(map)->addr->data;
+    start = (struct fd_map_entry *)CAST(map)->addr->connections;
     end = (struct fd_map_entry *)((char *)CAST(map)->addr + CAST(map)->addr->size);
     assert(((uintptr_t)end - (uintptr_t)start) % sizeof(struct fd_map_entry) == 0);
 
