@@ -123,7 +123,7 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
 
     struct iovec iov[2];
     int state = atomic_load_explicit(&buf->state, memory_order_acquire);
-    switch(state) {
+    switch(state & ATOMIC_SWAP) {
     default:
     case ATOMIC_INIT:
         // The following value will be overwritten once sendmmsg returned.
@@ -135,7 +135,11 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
         );
         buf->mm.msg_len = -1;
         LIBCRASH_HOOK(atomic_send_prepare(fd, buf));
-        atomic_store_explicit(&buf->state, ATOMIC_DO_SYSCALL, memory_order_release);
+        atomic_store_explicit(
+            &buf->state,
+            state = ATOMIC_DO_SYSCALL,
+            memory_order_release
+        );
         __attribute__((fallthrough));
     case ATOMIC_DO_SYSCALL:
         if(buf->mm.msg_len == (unsigned int)-1) {
@@ -150,29 +154,25 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
                 return -1;
             }
         }
-        // The next part gets quite ugly, just remember `case` is just a `goto`.
-        // So the if-else is only evaluated when coming from `ATOMIC_DO_SYSCALL`.
-        // Only `buf->active = ...` is re-used by `ATOMIC_SWAP_*` and is
-        // necessary if the active might have been swapped after memcpy
-        // completed, but the state was not changed, which would not be
-        // detected and the buffers would be swapped back on the next call.
-        if(buf->active) {
-            atomic_store_explicit(&buf->state, ATOMIC_SWAP_1to0, memory_order_release);
-            __attribute__((fallthrough));
-    case ATOMIC_SWAP_1to0:
-            buf->active = 1;
-        } else {
-            atomic_store_explicit(&buf->state, ATOMIC_SWAP_0to1, memory_order_release);
-            __attribute__((fallthrough));
-    case ATOMIC_SWAP_0to1:
-            buf->active = 0;
-        }
+        // Encode the active range in the state so can be restored on crash.
+        atomic_store_explicit(
+            &buf->state,
+            state = ATOMIC_SWAP | (!!buf->active << 7),
+            memory_order_release
+        );
+        __attribute__((fallthrough));
+    case ATOMIC_SWAP:
         // Left-trim the sent data on the inactive range, then swap the ranges.
+        buf->active = !!(state & (1 << 7));
         buf->ranges[!buf->active] = *ACTIVE_RANGE(buf);
         ring_buffer_ltrim(&buf->ranges[!buf->active], buf->mm.msg_len);
         LIBCRASH_HOOK(atomic_ring_buffer_ltrim(buf, !!buf->active));
         buf->active = !buf->active;
-        atomic_store_explicit(&buf->state, ATOMIC_INIT, memory_order_release);
+        atomic_store_explicit(
+            &buf->state,
+            state = ATOMIC_INIT,
+            memory_order_release
+        );
         return buf->mm.msg_len;
     }
 }
@@ -180,7 +180,7 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
 int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
     struct iovec iov[2];
     int state = atomic_load_explicit(&buf->state, memory_order_acquire);
-    switch(state) {
+    switch(state & ATOMIC_SWAP) {
     default:
     case ATOMIC_INIT:
         if(ACTIVE_RANGE(buf)->len >= sizeof(buf->buf)) {
@@ -196,7 +196,11 @@ int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
         );
         buf->mm.msg_len = -1;
         LIBCRASH_HOOK(atomic_recv_prepare(fd, buf));
-        atomic_store_explicit(&buf->state, ATOMIC_DO_SYSCALL, memory_order_release);
+        atomic_store_explicit(
+            &buf->state,
+            state = ATOMIC_DO_SYSCALL,
+            memory_order_release
+        );
         __attribute__((fallthrough));
     case ATOMIC_DO_SYSCALL:
         if(buf->mm.msg_len == (unsigned int)-1) {
@@ -215,34 +219,31 @@ int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
                 return -1;
             }
         }
-        // The next part gets quite ugly, just remember `case` is just a `goto`.
-        // So the if-else is only evaluated when coming from `ATOMIC_DO_SYSCALL`.
-        // Only `buf->active = ...` is re-used by `ATOMIC_SWAP_*` and is
-        // necessary if the active might have been swapped after memcpy
-        // completed, but the state was not changed yet. This would not be
-        // detected and the buffers would be swapped back on the next call.
         if(buf->mm.msg_len == 0) {
             atomic_store_explicit(&buf->state, ATOMIC_INIT, memory_order_release);
             return 0;
-        } else  if(buf->active) {
-            atomic_store_explicit(&buf->state, ATOMIC_SWAP_1to0, memory_order_release);
-            __attribute__((fallthrough));
-    case ATOMIC_SWAP_1to0:
-            buf->active = 1;
-        } else {
-            atomic_store_explicit(&buf->state, ATOMIC_SWAP_0to1, memory_order_release);
-            __attribute__((fallthrough));
-    case ATOMIC_SWAP_0to1:
-            buf->active = 0;
         }
+        // Encode the inactive range in the state so can be restored on crash.
+        atomic_store_explicit(
+            &buf->state,
+            state = ATOMIC_SWAP | (!buf->active << 7),
+            memory_order_release
+        );
+        __attribute__((fallthrough));
+    case ATOMIC_SWAP:
         // Extend the inactive range to include the received data.
+        buf->active = !(state & (1 << 7));
         buf->ranges[!buf->active] = (struct ring_buffer_range){
             .start = ACTIVE_RANGE(buf)->start,
             .len = ACTIVE_RANGE(buf)->len + buf->mm.msg_len,
         };
         LIBCRASH_HOOK(atomic_ring_buffer_append(buf, !!buf->active));
         buf->active = !buf->active;
-        atomic_store_explicit(&buf->state, ATOMIC_INIT, memory_order_release);
+        atomic_store_explicit(
+            &buf->state,
+            state = ATOMIC_INIT,
+            memory_order_release
+        );
         return buf->mm.msg_len;
     }
 }
