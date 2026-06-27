@@ -347,7 +347,7 @@ int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv) {
         fputs(argv[i], stderr);
     }
     fputc('\n', stderr);
-    list_fds("parse_cmdline\t");
+    list_fds("parse_cmdline");
 #endif
 
     return 0;

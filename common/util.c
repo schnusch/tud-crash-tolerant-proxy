@@ -17,6 +17,38 @@
 
 #include "util.h"
 
+int log_level = 0;
+
+void _log(int level, const char *filename, unsigned int lineno, const char *func, const char *fmt, ...) {
+    if(level > log_level) {
+        return;
+    }
+
+    int errnum = errno;
+
+    static const char indent[] = "                                       ";
+    static const char *indent_end = indent + sizeof(indent) - 1;
+    _Static_assert(sizeof(indent) - 1 >= 39, "indent buffer too small");
+    int n;
+
+    n = fprintf(stderr, "[%d] %s:%d ", (int)getpid(), filename, lineno);
+    if(n >= 0 && (size_t)n < 39) {
+        fputs(indent_end - 39 + n, stderr);
+    }
+
+    n = fprintf(stderr, "%s: ", func);
+    if(n >= 0 && (size_t)n < 22) {
+        fputs(indent_end - 22 + n, stderr);
+    }
+
+    va_list va;
+    va_start(va, fmt);
+    vfprintf(stderr, fmt, va);
+    va_end(va);
+
+    errno = errnum;
+}
+
 ssize_t readall(int fd, void *buf, size_t *size) {
     char *p = buf;
     size_t remaining = *size;
@@ -402,11 +434,11 @@ int list_fds(const char *prefix) {
         LOG(
             "%s"
             "%s"
-            "%2d"
+            "fd=%d"
             " fdflags=%s"
             " -> %s\n",
-            prefix,
-            (fd == dir_fd) ? "dir_fd=" : "       ",
+            prefix ? prefix : "",
+            prefix ? ": " : "",
             fd,
             (flags < 0) ? "-1" : str_bits(bits, str_flags, sizeof(str_flags), flags),
             target
@@ -419,19 +451,9 @@ cleanup:
     free(target);
     if(d) {
         closedir(d);
+    } else {
+        close(dir_fd);
     }
-    // Even though Linux' fdopendir(2) says
-    //
-    // > After a successful call to fdopendir(), fd is used internally by the
-    // > implementation, and should not otherwise be used by the application.
-    //
-    // and [POSIX](https://pubs.opengroup.org/onlinepubs/9799919799/functions/fdopendir.html)
-    // says
-    //
-    // > Upon calling closedir() the file descriptor shall be closed.
-    //
-    // it still needs to be closed manually.
-    close(dir_fd);
     errno = errnum;
     return rc;
 }
