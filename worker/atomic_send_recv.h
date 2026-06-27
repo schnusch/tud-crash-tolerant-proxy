@@ -64,7 +64,7 @@ struct atomic_ring_buffer {
  * bytes in `buf`, `tail` is only copied partially.
  * \return the number of bytes appended
  */
-void ring_buffer_append(
+size_t ring_buffer_append(
     char buf[RING_BUFFER_SIZE],
     struct ring_buffer_range *range,
     const char *tail,

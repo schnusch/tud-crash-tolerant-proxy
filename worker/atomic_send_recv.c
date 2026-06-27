@@ -5,7 +5,7 @@
 #include "../common/util.h"
 #include "../libcrash/libcrash.h"
 
-void ring_buffer_append(
+size_t ring_buffer_append(
     char buf[RING_BUFFER_SIZE],
     struct ring_buffer_range *range,
     const char *tail,
@@ -29,6 +29,7 @@ void ring_buffer_append(
         );
     }
     range->len += size;
+    return size;
 }
 
 void ring_buffer_ltrim(struct ring_buffer_range *range, size_t size) {
