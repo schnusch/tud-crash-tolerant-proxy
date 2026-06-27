@@ -9,11 +9,24 @@
 #endif
 #include <sys/socket.h>
 
+/**
+ * State machine of `atomic_send` and `atomic_recv`. If the process crashes
+ * during the function calls, the progress can be restored as long as the
+ * `struct atomic_ring_buffer` can be recovered.
+ */
 enum {
+    /**
+     * Initialize the ring buffer for the syscall. (All initialization is
+     * relocatable.)
+     */
     ATOMIC_INIT = 0,
-    ATOMIC_DO_SYSCALL,
-    ATOMIC_SWAP_0to1,
-    ATOMIC_SWAP_1to0,
+    /** Perform the syscall next. */
+    ATOMIC_DO_SYSCALL = 1,
+    /**
+     * The syscall was performed but the ring buffer ranges were not yet
+     * updated. (The currently active range is encoded in `(1 << 7)`.)
+     */
+    ATOMIC_SWAP = 0x7F,
 };
 
 struct ring_buffer_range {
