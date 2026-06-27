@@ -2,6 +2,7 @@
 
 #include <climits>
 extern "C" {
+#include <sys/epoll.h>
 #include <sys/un.h>
 #include "../common/util.h"
 }
@@ -117,4 +118,40 @@ TEST(strtol_limit, trailing_space) {
     long l;
     EXPECT_EQ(l = strtol_limit(&e, " 1 ", LONG_MIN, LONG_MAX), 1);
     EXPECT_FALSE(e);
+}
+
+TEST(epoll_str, many) {
+    char buf[512];
+    epoll_str(buf, sizeof(buf), EPOLLIN | EPOLLOUT | EPOLLRDHUP);
+    EXPECT_STREQ(buf, "EPOLLIN | EPOLLOUT | EPOLLRDHUP");
+}
+
+TEST(epoll_str, leftover) {
+    char buf[512];
+    epoll_str(buf, sizeof(buf), -1);
+    EXPECT_STREQ(buf, "EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLPRI | EPOLLERR | EPOLLHUP | EPOLLET | EPOLLONESHOT | EPOLLWAKEUP | EPOLLEXCLUSIVE | 0xFFFDFE0");
+}
+
+TEST(epoll_str, trunc) {
+    char buf[5];
+    epoll_str(buf, sizeof(buf), EPOLLIN);
+    EXPECT_STREQ(buf, "E...");
+}
+
+TEST(epoll_str, very_trunc) {
+    char buf[3];
+    epoll_str(buf, sizeof(buf), EPOLLIN);
+    EXPECT_STREQ(buf, "..");
+}
+
+TEST(epoll_str, unknown) {
+    char buf[512];
+    epoll_str(buf, sizeof(buf), 0x08000000);
+    EXPECT_STREQ(buf, "0x8000000");
+}
+
+TEST(epoll_str, zero) {
+    char buf[512];
+    epoll_str(buf, sizeof(buf), 0);
+    EXPECT_STREQ(buf, "0x0");
 }
