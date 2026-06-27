@@ -122,7 +122,8 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
     }
 
     struct iovec iov[2];
-    switch(buf->state) {
+    int state = atomic_load_explicit(&buf->state, memory_order_acquire);
+    switch(state) {
     default:
     case ATOMIC_INIT:
         // The following value will be overwritten once sendmmsg returned.
@@ -178,7 +179,8 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
 
 int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
     struct iovec iov[2];
-    switch(buf->state) {
+    int state = atomic_load_explicit(&buf->state, memory_order_acquire);
+    switch(state) {
     default:
     case ATOMIC_INIT:
         if(ACTIVE_RANGE(buf)->len >= sizeof(buf->buf)) {
