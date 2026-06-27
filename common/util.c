@@ -1,3 +1,5 @@
+#define _DEFAULT_SOURCE // pwritev
+#include <assert.h>
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -7,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/uio.h> // pwritev
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -32,21 +35,33 @@ ssize_t readall(int fd, void *buf, size_t *size) {
     return *size;
 }
 
-ssize_t writeall(int fd, const void *buf, size_t *size) {
-    const char *p = buf;
-    size_t remaining = *size;
-    while(remaining > 0) {
+size_t pwritev_all(int fd, const struct iovec *iov, size_t iovcnt, off_t offset) {
+    struct iovec *iov_copy = alloca(iovcnt * sizeof(*iov));
+    memcpy(iov_copy, iov, iovcnt * sizeof(*iov));
+    size_t total = 0;
+    while(iovcnt > 0) {
         ssize_t n;
-        EINTR_RETRY(n, write(fd, p, remaining));
-        if(n < 0) {
-            *size = p - (char *)buf;
-            return -1;
+        EINTR_RETRY(n, pwritev(fd, iov_copy, iovcnt, offset));
+        if(n <= 0) {
+            break;
         }
-        p += n;
-        remaining -= n;
+        offset += n;
+        total += n;
+        // Drop the first `n` bytes.
+        while(n > 0) {
+            assert(iovcnt > 0);
+            if((size_t)n >= iov_copy->iov_len) {
+                n -= iov_copy->iov_len;
+                ++iov_copy;
+                --iovcnt;
+            } else {
+                iov_copy->iov_base = (char *)iov_copy->iov_base + n;
+                iov_copy->iov_len -= n;
+                break; // n = 0;
+            }
+        }
     }
-    *size = p - (char *)buf;
-    return *size;
+    return total;
 }
 
 int fd_cloexec(int fd, int set) {
