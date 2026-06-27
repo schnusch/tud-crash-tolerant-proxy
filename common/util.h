@@ -11,21 +11,23 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define perror(s)    (fprintf(stderr, "[%d] %s:%d\t%s: ",     getpid(), __FILE__, __LINE__, __func__), perror(s))
-#define LOG(fmt, ...) fprintf(stderr, "[%d] %s:%d\t%s: " fmt, getpid(), __FILE__, __LINE__, __func__, __VA_ARGS__)
+/**
+ * Only display log messages of a level less than or equal to this.
+ */
+extern int log_level;
+
+enum {
+    LOG_ALWAYS = -1,
+    // TODO
+};
 
 /**
- * Divide two integers rounding up.
- * \param NUM numerator
- * \param DEM denominator
+ * Only call this function through `LOG`.
  */
-#define DIV_ROUND_UP(NUM, DEM) (((NUM) + (DEM) - 1) / (DEM))
+void _log(int level, const char *filename, unsigned int lineno, const char *func, const char *fmt, ...);
 
-/**
- * Buffer size needed for the decimal representation of an int. Excluding the
- * terminating NUL byte.
- */
-#define INT_DEC_BUFSIZE (1 + DIV_ROUND_UP(sizeof(int) * CHAR_BIT - 1, 3))
+#define LOG(...) _log(LOG_ALWAYS, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define perror(s) (LOG(""), perror(s))
 
 /**
  * Repeat the syscall `CALL` if it returned `< 0` and set errno to `EINTR`. The
