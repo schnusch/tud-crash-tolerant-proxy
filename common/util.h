@@ -150,6 +150,24 @@ long strtol_limit(int *err, const char *str, long min, long max);
 const char *signame(int signum);
 
 /**
+ * Used by `str_bits`.
+ */
+struct str_bit {
+    uint64_t num;
+    const char *str;
+};
+
+/**
+ * Convert a bitmask to its string representation, see `epoll_str`.
+ */
+char *str_bits(const struct str_bit *bits, char *buf, size_t size, uint64_t events);
+
+/**
+ * Convert epoll bitmask to their string constants.
+ */
+char *epoll_str(char *buf, size_t size, uint32_t events);
+
+/**
  * Close file descriptor `*fd`. `*fd` is set to `-1` on success. Errors are
  * logged with `perror`. Useful with `__attribute__((cleanup(closep)))`.
  */

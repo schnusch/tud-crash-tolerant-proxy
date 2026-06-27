@@ -6,9 +6,11 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/epoll.h>
 #include <sys/uio.h> // pwritev
 #include <sys/un.h>
 #include <unistd.h>
@@ -392,6 +394,11 @@ int list_fds(const char *prefix) {
         int flags = fcntl(fd, F_GETFD);
 
         // ...
+        static const struct str_bit bits[] = {
+            { .num = FD_CLOEXEC, .str = "FD_CLOEXEC" },
+            {0, NULL}
+        };
+        char str_flags[512];
         LOG(
             "%s"
             "%s"
@@ -401,7 +408,7 @@ int list_fds(const char *prefix) {
             prefix,
             (fd == dir_fd) ? "dir_fd=" : "       ",
             fd,
-            (flags < 0) ? "-1        " : (flags & FD_CLOEXEC) ? "FD_CLOEXEC" : "0         ",
+            (flags < 0) ? "-1" : str_bits(bits, str_flags, sizeof(str_flags), flags),
             target
         );
     }
@@ -474,6 +481,62 @@ const char *signame(int signum) {
         snprintf(unknown, sizeof(unknown), "unknown signal %d", signum);
         return unknown;
     }
+}
+
+char *str_bits(const struct str_bit *bits, char *buf, size_t size, uint64_t events) {
+    uint64_t rm = 0;
+    char *const end = buf + size;
+    char *p = buf;
+    for(size_t i = 0; bits[i].str && p < end; ++i) {
+        if((events & bits[i].num) == bits[i].num) {
+            rm |= bits[i].num;
+            p += strlcpy(p, bits[i].str, end - p);
+            if(p >= end) {
+                break;
+            }
+            p += strlcpy(p, " | ", end - p);
+        }
+    }
+    if(p >= end) {
+trunc:
+        if(size >= 4) {
+            p = end - 4;
+        } else {
+            p = buf;
+        }
+        strlcpy(p, "...", end - p);
+        return buf;
+    }
+    events &= ~rm;
+    if(events != 0 || p == buf) {
+        int n = snprintf(p, end - p, "0x%"PRIX64, events);
+        if(n < 0 || end - p <= n) {
+            goto trunc;
+        }
+    } else {
+        assert(p - buf >= 3);
+        p[-3] = '\0';
+    }
+    return buf;
+}
+
+char *epoll_str(char *buf, size_t size, uint32_t events) {
+    static const struct str_bit bits[] = {
+#define EPOLL_STR(x) { .num = x, .str = #x }
+        EPOLL_STR(EPOLLIN),
+        EPOLL_STR(EPOLLOUT),
+        EPOLL_STR(EPOLLRDHUP),
+        EPOLL_STR(EPOLLPRI),
+        EPOLL_STR(EPOLLERR),
+        EPOLL_STR(EPOLLHUP),
+        EPOLL_STR(EPOLLET),
+        EPOLL_STR(EPOLLONESHOT),
+        EPOLL_STR(EPOLLWAKEUP),
+        EPOLL_STR(EPOLLEXCLUSIVE),
+#undef EPOLL_STR
+        {0, NULL}
+    };
+    return str_bits(bits, buf, size, events);
 }
 
 void closep(int *fd) {
