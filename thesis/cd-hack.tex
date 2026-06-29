@@ -1,0 +1,54 @@
+% Replace Open Sans with Noto Sans.
+\AtBeginDocument{
+    % Load "Noto Sans" and define `\notosans`.
+    \usepackage[
+        nott,      % do not load not monospace
+        sf,        % only load sans-serif
+        sfdefault, % activate sans-serif
+        % numerals
+        lining,
+        tabular,
+        % light font
+        light,
+        semibold,
+    ]{noto}
+    % Overwrite tudscr's internal font macro `tud@cdfont@fam@lf` with `\notosans`.
+    % \tempa = tud@x@fontspec@fam@*\tud@cdfont@fam@lf
+    \edef\tempa{tud@x@fontspec@fam@\csname tud@cdfont@fam@lf\endcsname }%
+    % \tempa = *\csname *\tempa \endcsname
+    \expandafter\expandafter
+    \expandafter\def
+    \expandafter\expandafter
+    \expandafter\tempa
+    \expandafter\expandafter
+    \expandafter{%
+    \expandafter\csname
+    \tempa      \endcsname
+    }%
+    % *\tempa = \notosans
+    \expandafter\let\tempa\notosans
+}
+% Title page header (\faculty, ...) font.
+\makeatletter
+\let \old@tud@head@font@set \tud@head@font@set
+\renewcommand*\tud@head@font@set{%
+    {%
+        \edef\tud@cdfont@fam@lf{\notosansfamily}%
+        \old@tud@head@font@set
+    }%
+}
+\makeatother
+
+% Use new logo.
+% https://github.com/tud-cd/tudscr/blob/v2.06o/source/tudscr-pagestyle.dtx
+% The logo is set \AtBeginDocument so \tud@layer@main@black must be overridden
+% after.
+\AtBeginDocument{%
+    \csname tud@savelayerbox\endcsname{main@black}{%
+        \includegraphics[
+            keepaspectratio,
+            height=\csname tud@dim@mainlogoheight\endcsname,
+            viewport={6.2mm 4.546mm 71.224mm 26.202mm},
+        ]{TUD Logo__eps CMYK/schwarz/TUD_Logos_final_CMYK_TUD_Logo_horizontal_schwarz_en.eps}%
+    }%
+}
