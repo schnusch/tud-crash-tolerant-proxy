@@ -1,6 +1,7 @@
 {
   lib,
   stdenv,
+  callPackage,
   doxygen,
   gtest,
   pkgconf,
@@ -35,6 +36,8 @@ stdenv.mkDerivation {
   ];
 
   makeFlags = [ "PREFIX=${builtins.placeholder "out"}" ];
+
+  passthru.thesis = callPackage ./thesis/package.nix { };
 
   meta = {
     maintainers = with lib.maintainers; [ schnusch ];

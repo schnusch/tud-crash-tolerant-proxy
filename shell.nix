@@ -1,19 +1,23 @@
 {
   pkgs ? import <nixpkgs> { },
   callPackage ? pkgs.callPackage,
-  stdenv ? pkgs.stdenv,
 }:
-callPackage ./package.nix {
-  stdenv = stdenv // {
+let
+  package = callPackage ./package.nix { };
+in
+package.override (prev: {
+  stdenv = prev.stdenv // {
     mkDerivation =
       {
-        buildInputs,
+        buildInputs ? [ ],
         checkInputs ? [ ],
+        nativeBuildInputs ? [ ],
         nativeCheckInputs ? [ ],
         ...
       }:
       pkgs.mkShell {
-        buildInputs = buildInputs ++ checkInputs ++ nativeCheckInputs;
+        buildInputs = buildInputs ++ checkInputs;
+        nativeBuildInputs = nativeBuildInputs ++ nativeCheckInputs ++ package.thesis.nativeBuildInputs;
       };
   };
-}
+})

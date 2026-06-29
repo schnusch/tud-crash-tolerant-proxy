@@ -1,0 +1,24 @@
+\begin{declarations}%
+    \confirmation
+
+    \def\tempa{%
+        I hereby certify that, while authoring this document entitled
+        \textit{\csname @title\endcsname}, the only large language models used
+        were the following:
+
+        \begin{itemize}\tightlist
+        \item
+            \textbf{GPT-5.5 by OpenAI} \url{https://chatgpt.com/}
+
+            \begin{itemize}\tightlist
+            \item
+                ...
+            \end{itemize}%
+        \end{itemize}%
+    }%
+    \nextdeclaration{Statement of usage of large language models}{%
+        \tempa
+        \vskip \csname z@skip\endcsname
+        \csname @confirmationclosing\endcsname
+    }%
+\end{declarations}%

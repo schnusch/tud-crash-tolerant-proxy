@@ -1,0 +1,24 @@
+---
+documentclass: tudscrreprt
+classoption:
+- abstract=heading
+- abstract=notoc
+- twoside
+- openright
+# loading "Roboto Mono" fails
+- ttfont=false
+boxlinks: true
+csquotes: true
+mathspec: true # tudscr does not work with `unicode-math`
+
+# Do not set `lang`, so babel is not loaded.
+lang: ""
+hyperrefoptions:
+- pdflang=en-US
+- pdfpagelayout=TwoPageRight
+
+title: A Crash-Tolerant Proxy Service for High-Availability Environments
+
+abstract: |
+  \lipsum
+...

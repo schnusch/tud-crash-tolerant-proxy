@@ -1,0 +1,36 @@
+\input{cd-hack.tex}
+
+\usepackage{polyglossia}
+\setmainlanguage[variant=us]{english}
+
+% Title page
+\faculty{Faculty of Computer Science}
+\institute{Institute of Systems Architecture}
+\chair{Chair of Operating Systems}
+\course{B.\,Sc. Informatik (PO~2009)}
+\AtBeginDocument{%
+    \thesis{\bachelorthesisname}%
+}
+
+% Include declarations and task right after the title page.
+\usepackage{lipsum}
+\usepackage{pdfpages}
+\AddToHook{cmd/maketitle/after}{%
+    \csname if@openright\endcsname
+        \cleardoublepage
+    \else
+        \clearpage
+    \fi
+    \input{declarations.tex}%
+    \csname if@openright\endcsname
+        \cleardoublepage
+    \else
+        \clearpage
+    \fi
+    \includepdf[
+        pages=-,
+        pagecommand={\thispagestyle{empty}},
+        noautoscale,
+        fitpaper,
+    ]{task.pdf}%
+}
