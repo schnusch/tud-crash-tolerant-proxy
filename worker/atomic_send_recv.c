@@ -5,31 +5,106 @@
 #include "../common/util.h"
 #include "../libcrash/libcrash.h"
 
+/**
+ * Initialize one or two `struct iovec` pointing to the parts of the
+ * `atomic_ring_buffer::buffer` occupied by the currently active range.
+ * \return `msghdr::msg_iovlen`
+ */
+size_t set_iovec_used(
+    struct iovec iov[2],
+    const char buf[RING_BUFFER_SIZE],
+    struct ring_buffer_range *range
+) {
+    struct iovec *pv = iov;
+    const size_t end = range->start + range->len;
+    if(end <= RING_BUFFER_SIZE) {
+        // [            |============|            ]
+        //               iov[0]
+        *pv++ = (struct iovec){
+            .iov_base = buf + range->start,
+            .iov_len = range->len,
+        };
+    } else {
+        // [============|            |============]
+        //  iov[1]          unused    iov[0]
+        size_t const until_end = RING_BUFFER_SIZE - range->start;
+        *pv++ = (struct iovec){
+            .iov_base = buf + range->start,
+            .iov_len = until_end,
+        };
+        *pv++ = (struct iovec){
+            .iov_base = buf,
+            .iov_len = range->len - until_end,
+        };
+    }
+    return pv - iov;
+}
+
+/**
+ * Initialize one or two `struct iovec` pointing to the parts of the
+ * `atomic_ring_buffer::buffer` not occupied by the currently active range.
+ * \return `msghdr::msg_iovlen`
+ */
+size_t set_iovec_unused(
+    struct iovec iov[2],
+    char buf[RING_BUFFER_SIZE],
+    struct ring_buffer_range *range
+) {
+    struct iovec *pv = iov;
+    if(range->len == 0) {
+        range->start = 0;
+    }
+    // Point the iovecs to the buffer before and after the currently used
+    // range.
+    const size_t end = range->start + range->len;
+    if(range->start == 0) {
+        // [============|                         ]
+        //      used     iov[0]
+        *pv++ = (struct iovec){
+            .iov_base = buf + range->len,
+            .iov_len = RING_BUFFER_SIZE - range->len,
+        };
+    } else if(end >= RING_BUFFER_SIZE) {
+        // [==|                        |==========]
+        //     iov[0]                       used
+        const size_t skip = end - RING_BUFFER_SIZE;
+        *pv++ = (struct iovec){
+            .iov_base = buf + skip,
+            .iov_len = range->start - skip,
+        };
+    } else {
+        // [            |============|            ]
+        //  iov[1]           used     iov[0]
+        *pv++ = (struct iovec){
+            .iov_base = buf + end,
+            .iov_len = RING_BUFFER_SIZE - end,
+        };
+        *pv++ = (struct iovec){
+            .iov_base = buf,
+            .iov_len = range->start,
+        };
+    }
+    return pv - iov;
+}
+
 size_t ring_buffer_append(
     char buf[RING_BUFFER_SIZE],
     struct ring_buffer_range *range,
     const char *tail,
     size_t size
 ) {
-    if(size > RING_BUFFER_SIZE - range->len) {
-        size = RING_BUFFER_SIZE - range->len;
+    size_t copied = 0;
+    struct iovec iov[2];
+    for(size_t i = 0, n = set_iovec_unused(iov, buf, range); i < n && size > 0; ++i) {
+        if(size < iov[i].iov_len) {
+            iov[i].iov_len = size;
+        }
+        memcpy(iov[i].iov_base, tail, iov[i].iov_len);
+        tail += iov[i].iov_len;
+        size -= iov[i].iov_len;
+        copied += iov[i].iov_len;
     }
-    const size_t end = range->start - range->len;
-    const size_t space_after = RING_BUFFER_SIZE - end;
-    memcpy(
-        buf + end,
-        tail,
-        size > space_after ? space_after : size
-    );
-    if(size > space_after) {
-        memcpy(
-            buf,
-            tail + space_after,
-            size - space_after
-        );
-    }
-    range->len += size;
-    return size;
+    return copied;
 }
 
 void ring_buffer_ltrim(struct ring_buffer_range *range, size_t size) {
@@ -42,78 +117,39 @@ void ring_buffer_ltrim(struct ring_buffer_range *range, size_t size) {
     }
 }
 
-/**
- * Initialize one or two `struct iovec` pointing to the parts of the
- * `atomic_ring_buffer::buffer` occupied by the currently active range.
- * \return `msghdr::msg_iovlen`
- */
-size_t set_iovec_used(struct iovec iov[2], struct atomic_ring_buffer *buf) {
-    struct iovec *pv = iov;
-    const size_t end = ACTIVE_RANGE(buf)->start + ACTIVE_RANGE(buf)->len;
-    if(end <= sizeof(buf->buf)) {
-        // [            |============|            ]
-        //               iov[0]
-        *pv++ = (struct iovec){
-            .iov_base = buf->buf + ACTIVE_RANGE(buf)->start,
-            .iov_len = ACTIVE_RANGE(buf)->len,
-        };
-    } else {
-        // [============|            |============]
-        //  iov[1]          unused    iov[0]
-        size_t const until_end = sizeof(buf->buf) - ACTIVE_RANGE(buf)->start;
-        *pv++ = (struct iovec){
-            .iov_base = buf->buf + ACTIVE_RANGE(buf)->start,
-            .iov_len = until_end,
-        };
-        *pv++ = (struct iovec){
-            .iov_base = buf->buf,
-            .iov_len = ACTIVE_RANGE(buf)->len - until_end,
-        };
-    }
-    return pv - iov;
-}
+size_t ring_buffer_move(
+    char dst_buf[RING_BUFFER_SIZE],
+    struct ring_buffer_range *dst_range,
+    const char src_buf[RING_BUFFER_SIZE],
+    struct ring_buffer_range *src_range
+) {
+    struct iovec v_dst[2];
+    const size_t n_dst = set_iovec_unused(v_dst, dst_buf, dst_range);
+    size_t i_dst = 0;
 
-/**
- * Initialize one or two `struct iovec` pointing to the parts of the
- * `atomic_ring_buffer::buffer` not occupied by the currently active range.
- * \return `msghdr::msg_iovlen`
- */
-size_t set_iovec_unused(struct iovec iov[2], struct atomic_ring_buffer *buf) {
-    struct iovec *pv = iov;
-    if(ACTIVE_RANGE(buf)->len == 0) {
-        ACTIVE_RANGE(buf)->start = 0;
+    struct iovec v_src[2];
+    const size_t n_src = set_iovec_used(v_src, src_buf, src_range);
+    size_t i_src = 0;
+
+    size_t copied = 0;
+    while(i_dst < n_dst && i_src < n_src) {
+#define MIN(a, b) ((a) <= (b) ? (a) : (b))
+        const size_t min = MIN(v_dst[i_dst].iov_len, v_src[i_src].iov_len);
+#undef MIN
+        memcpy(v_dst[i_dst].iov_base, v_src[i_src].iov_base, min);
+        copied += min;
+
+        v_dst[i_dst].iov_base = (char *)v_dst[i_dst].iov_base + min;
+        v_dst[i_dst].iov_len -= min;
+        i_dst += (v_dst[i_dst].iov_len == 0);
+
+        v_src[i_src].iov_base = (char *)v_src[i_src].iov_base + min;
+        v_src[i_src].iov_len -= min;
+        i_src += (v_src[i_src].iov_len == 0);
     }
-    // Point the iovecs to the buffer before and after the currently used
-    // range.
-    const size_t end = ACTIVE_RANGE(buf)->start + ACTIVE_RANGE(buf)->len;
-    if(ACTIVE_RANGE(buf)->start == 0) {
-        // [============|                         ]
-        //      used     iov[0]
-        *pv++ = (struct iovec){
-            .iov_base = buf->buf + ACTIVE_RANGE(buf)->len,
-            .iov_len = sizeof(buf->buf) - ACTIVE_RANGE(buf)->len,
-        };
-    } else if(end >= sizeof(buf->buf)) {
-        // [==|                        |==========]
-        //     iov[0]                       used
-        const size_t skip = end - sizeof(buf->buf);
-        *pv++ = (struct iovec){
-            .iov_base = buf->buf + skip,
-            .iov_len = ACTIVE_RANGE(buf)->start - skip,
-        };
-    } else {
-        // [            |============|            ]
-        //  iov[1]           used     iov[0]
-        *pv++ = (struct iovec){
-            .iov_base = buf->buf + end,
-            .iov_len = sizeof(buf->buf) - end,
-        };
-        *pv++ = (struct iovec){
-            .iov_base = buf->buf,
-            .iov_len = ACTIVE_RANGE(buf)->start,
-        };
-    }
-    return pv - iov;
+    dst_range->len += copied;
+    ring_buffer_ltrim(src_range, copied);
+    return copied;
 }
 
 int atomic_send(int fd, struct atomic_ring_buffer *buf) {
@@ -145,7 +181,7 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
         if(buf->mm.msg_len == (unsigned int)-1) {
             buf->mm.msg_hdr = (struct msghdr){
                 .msg_iov = iov,
-                .msg_iovlen = set_iovec_used(iov, buf),
+                .msg_iovlen = set_iovec_used(iov, buf->buf, ACTIVE_RANGE(buf)),
             };
             LIBCRASH_HOOK(atomic_send_sendmmsg_pre(fd, buf));
             int rc = sendmmsg(fd, &buf->mm, 1, MSG_DONTWAIT);
@@ -206,7 +242,7 @@ int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
         if(buf->mm.msg_len == (unsigned int)-1) {
             buf->mm.msg_hdr = (struct msghdr){
                 .msg_iov = iov,
-                .msg_iovlen = set_iovec_unused(iov, buf),
+                .msg_iovlen = set_iovec_unused(iov, buf->buf, ACTIVE_RANGE(buf)),
             };
             LIBCRASH_HOOK(atomic_recv_recvmmsg_pre(fd, buf));
             int rc = recvmmsg(fd, &buf->mm, 1, MSG_DONTWAIT, NULL);

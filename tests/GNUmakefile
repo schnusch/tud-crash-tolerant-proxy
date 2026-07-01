@@ -11,7 +11,8 @@ OBJS = \
 	cmdline.o \
 	fd_map.o \
 	ipc.o \
-	util.o
+	util.o \
+	worker.o
 
 CPPFLAGS =
 final_cppflags := $(CPPFLAGS) $(shell pkgconf --cflags gtest)
@@ -19,6 +20,7 @@ final_cppflags := $(CPPFLAGS) $(shell pkgconf --cflags gtest)
 .PHONY: check clean
 
 check: main
+	$(MAKE) -C .. final_cppflags='$(final_cppflags) -DUSE_LIBCRASH' bin/worker
 	valgrind ./main
 
 clean:

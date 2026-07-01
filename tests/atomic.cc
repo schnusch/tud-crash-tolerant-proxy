@@ -290,6 +290,39 @@ TEST_F(Test_atomic_send, fail_sendmmsg) {
 
 class Test_atomic_recv : public Test_atomic { };
 
+TEST_F(Test_atomic_recv, recvmmsg_nonblock) {
+    struct atomic_ring_buffer buf = ATOMIC_RING_BUFFER_INIT;
+
+    EXPECT_EQ(shutdown(sockpair[0], SHUT_WR), 0);
+
+    // Check MSG_DONTWAIT.
+    ASSERT_LT(atomic_recv(sockpair[0], &buf), 0);
+    ASSERT_EQ(errno, EWOULDBLOCK);
+
+    // Send data to the socket.
+    char tx[4096];
+    memset(tx, 'a', sizeof(tx));
+    ASSERT_EQ(send(sockpair[1], tx, sizeof(tx), MSG_DONTWAIT), sizeof(tx));
+
+    // Receive data.
+    error_cases = 0;
+    ASSERT_EQ(atomic_recv(sockpair[0], &buf), sizeof(tx));
+
+    // Ensure the data was received.
+    EXPECT_EQ(
+        string_from_ringbuffer(&buf, 0),
+        std::string(tx, sizeof(tx))
+    );
+
+    // Check MSG_DONTWAIT.
+    ASSERT_LT(atomic_recv(sockpair[0], &buf), 0);
+    ASSERT_EQ(errno, EWOULDBLOCK);
+
+    // Check EOF.
+    EXPECT_EQ(shutdown(sockpair[1], SHUT_WR), 0);
+    ASSERT_EQ(atomic_recv(sockpair[0], &buf), 0);
+}
+
 static void crash_before_recv(int sockpair[2], int e, ssize_t start, int active) {
     static const char initial[] = "TODO initial";
     static const char tx[] = "TODO crash_after_recv";

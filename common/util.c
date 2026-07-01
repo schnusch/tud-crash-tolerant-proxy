@@ -201,8 +201,7 @@ char *format_sockaddr(char *buf, const struct sockaddr *addr) {
     switch(addr->sa_family) {
     case AF_INET:
         if(!inet_ntop(AF_INET, &((struct sockaddr_in *)addr)->sin_addr, p, INET_ADDRSTRLEN)) {
-            strlcpy(buf, "ERROR FORMATTING ADDRESS", FORMAT_SOCKADDR_BUFLEN);
-            return buf;
+            return NULL;
         }
         port = ((struct sockaddr_in *)addr)->sin_port;
         p += strlen(p);
@@ -210,22 +209,24 @@ char *format_sockaddr(char *buf, const struct sockaddr *addr) {
     case AF_INET6:
         *p++ = '[';
         if(!inet_ntop(AF_INET6, &((struct sockaddr_in6 *)addr)->sin6_addr, p, INET6_ADDRSTRLEN)) {
-            strlcpy(buf, "ERROR FORMATTING ADDRESS", FORMAT_SOCKADDR_BUFLEN);
-            return buf;
+            return NULL;
         }
         port = ((struct sockaddr_in6 *)addr)->sin6_port;
         p += strlen(p);
         *p++ = ']';
         break;
-    case AF_UNIX:
-        strlcpy(buf, "AF_UNIX", FORMAT_SOCKADDR_BUFLEN);
-        return buf;
     default:
-        strlcpy(buf, "UNSUPPORTED ADDRESS", FORMAT_SOCKADDR_BUFLEN);
-        return buf;
+        errno = ENOTSUP;
+        return NULL;
     }
-    snprintf(p, FORMAT_SOCKADDR_BUFLEN - (p - buf), ":%"PRIu16, ntohs(port));
-    buf[FORMAT_SOCKADDR_BUFLEN - 1] = '\0';
+    size_t remaining = FORMAT_SOCKADDR_BUFLEN - (p - buf);
+    int used = snprintf(p, remaining, ":%"PRIu16, ntohs(port));
+    if(used < 0) {
+        return NULL;
+    } else if((size_t)used >= remaining) {
+        errno = EOVERFLOW;
+        return NULL;
+    }
     return buf;
 }
 

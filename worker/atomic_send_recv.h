@@ -110,6 +110,18 @@ size_t ring_buffer_append(
 void ring_buffer_ltrim(struct ring_buffer_range *range, size_t size);
 
 /**
+ * Remove as many bytes as would fit into `dst_*` from the beginning of `src_*`
+ * and append them to `dst_*`.
+ * \return the number of bytes moved
+ */
+size_t ring_buffer_move(
+    char dst_buf[RING_BUFFER_SIZE],
+    struct ring_buffer_range *dst_range,
+    const char src_buf[RING_BUFFER_SIZE],
+    struct ring_buffer_range *src_range
+);
+
+/**
  * Send as much data out of `fd` as possible without blocking and trim sent data
  * from `buf`.
  * \return -1 on error

@@ -10,26 +10,33 @@ struct cmdline_opts {
     int shared_mem_fd;
     /** Address of the shared memory. */
     struct shared_memory *shared_mem_addr;
+    /** Upstream address to forward incoming connections to. */
+    struct sockaddr_storage upstream_addr;
+#ifdef CMDLINE_WORKER
+    /**
+     * A single UNIX socket connecting the listener process to all its worker
+     * processes.
+     */
+    int ipc_broadcast;
+    /**
+     * A UNIX socket connecting the listener process to a single worker process.
+     */
+    int ipc_direct;
+#endif
 #ifdef CMDLINE_LISTENER
     size_t num_listen_addrs;
     struct sockaddr_storage *listen_addrs;
-#endif
     /** Number of items in `listen_fds`. */
     size_t num_listen_fds;
     /** Listening file descriptors. */
     int *listen_fds;
     /** Number of worker processes. */
     unsigned int num_workers;
-#ifdef CMDLINE_WORKER
-    /** UNIX socket connecting the worker to the keeper process. */
-    int ipc_fd;
-#endif
-    /** PID FD to the keeper process. Only parsed in the worker command line. */
-    int parent_pidfd;
     /** Path to the executable of the keeper. */
     const char *listener;
     /** Path to the executable of the worker. */
     const char *worker;
+#endif
 };
 
 /**
@@ -43,12 +50,6 @@ void free_cmdline(struct cmdline_opts *cmdline);
  * \return -1 on error
  */
 int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv);
-
-/**
- * Convert `cmdline` to a argv array.
- * \return pointer should be freed with `free(3)`
- */
-char **cmdline_to_argv(const struct cmdline_opts *cmdline, const char *argv0, int ipc_fd);
 
 /**
  * Print command line usage.
