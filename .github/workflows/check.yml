@@ -14,4 +14,4 @@ jobs:
         libgtest-dev
         pkgconf
         valgrind
-    - run: make check
+    - run: make EXTRA_CPPFLAGS='-fdiagnostics-color=always' check
