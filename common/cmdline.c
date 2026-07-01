@@ -18,14 +18,16 @@ enum getopt_result {
 #endif
     OPT_UNKNOWN = '?',
     OPT_HELP = 256,
+    OPT_UPSTREAM_ADDR,
     OPT_LISTEN_FD,
     OPT_SHARED_FD,
 #ifndef SHARED_MEMORY_RELOCATABLE
-    OPT_SHARED_ADDR,
+    OPT_UPSTREAM_ADDR,
 #endif
     OPT_NUM_WORKERS,
 #ifdef CMDLINE_WORKER
-    OPT_IPC_FD,
+    OPT_IPC_BROADCAST,
+    OPT_IPC_DIRECT,
 #endif
     OPT_PID_FD,
     OPT_LISTENER_BIN,
@@ -38,17 +40,18 @@ static const struct option long_options[] = {
 #ifndef SHARED_MEMORY_RELOCATABLE
     {"shared-memory-address", required_argument, NULL, OPT_SHARED_ADDR},
 #endif
+    {"upstream-address", required_argument, NULL, OPT_UPSTREAM_ADDR},
+#ifdef CMDLINE_WORKER
+    {"ipc-broadcast", required_argument, NULL, OPT_IPC_BROADCAST},
+    {"ipc-direct", required_argument, NULL, OPT_IPC_DIRECT},
+#endif
 #ifdef CMDLINE_LISTENER
     {"listen", required_argument, NULL, OPT_LISTEN_ADDR},
-#endif
     {"listen-fd", required_argument, NULL, OPT_LISTEN_FD},
     {"num-workers", required_argument, NULL, OPT_NUM_WORKERS},
-#ifdef CMDLINE_WORKER
-    {"ipc-fd", required_argument, NULL, OPT_IPC_FD},
-#endif
-    {"parent-pidfd", required_argument, NULL, OPT_PID_FD},
     {"listener", required_argument, NULL, OPT_LISTENER_BIN},
     {"worker", required_argument, NULL, OPT_WORKER_BIN},
+#endif
     {NULL, 0, NULL, 0},
 };
 
@@ -61,16 +64,18 @@ static const struct {
 #ifndef SHARED_MEMORY_RELOCATABLE
     {OPT_SHARED_ADDR, "address of the shared memory"},
 #endif
+    {OPT_UPSTREAM_ADDR, "upstream address to forward incoming connections to"},
+#ifdef CMDLINE_WORKER
+    {OPT_IPC_BROADCAST, "UNIX socket connecting the listener process to all its worker processes"},
+    {OPT_IPC_DIRECT, "UNIX socket connecting the listener process to a single worker process"},
+#endif
 #ifdef CMDLINE_LISTENER
     {OPT_LISTEN_ADDR, "listen address"},
-#endif
     {OPT_LISTEN_FD, "listening file descriptors on which incoming connections are accepted"},
     {OPT_NUM_WORKERS, "number of worker processes"},
-#ifdef CMDLINE_WORKER
-    {OPT_IPC_FD, "UNIX socket connecting the worker to the keeper process"},
-#endif
     {OPT_LISTENER_BIN, "path to the executable of the listener"},
     {OPT_WORKER_BIN, "path to the executable of the worker"},
+#endif
     {OPT_END, NULL},
 };
 
@@ -208,28 +213,36 @@ error:
 #endif
 
 void free_cmdline(struct cmdline_opts *cmdline) {
+#ifdef CMDLINE_LISTENER
     cmdline->num_listen_fds = 0;
     free(cmdline->listen_fds);
     cmdline->listen_fds = NULL;
+#endif
 }
+
+_Static_assert(
+    AF_UNIX != (sa_family_t)-1 && AF_INET != (sa_family_t)-1 && AF_INET6 != (sa_family_t)-1,
+    "address family sentinel value"
+);
 
 int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv) {
     *cmdline = (struct cmdline_opts){
         (int)-1, // shared_mem_fd
         NULL, // shared_mem_addr
+        (struct sockaddr_storage){ .ss_family = -1 }, // upstream_addr
+#ifdef CMDLINE_WORKER
+        (int)-1, // ipc_broadcast
+        (int)-1, // ipc_direct
+#endif
 #ifdef CMDLINE_LISTENER
         (size_t)0, // num_listen_addrs
         (struct sockaddr_storage *)NULL, // listen_addrs
-#endif
         (size_t)0, // num_listen_fds
         (int *)NULL, // listen_fds
         (unsigned int)1, // num_workers
-#ifdef CMDLINE_WORKER
-        (int)-1, // ipc_fd
-#endif
-        (int)-1, // parent_pidfd
         (char *)NULL, // listener
         (char *)NULL, // worker
+#endif
     };
 
     for (enum getopt_result opt; (opt = getopt_long(argc, argv, "l", long_options, NULL)) != OPT_END;) {
@@ -247,6 +260,28 @@ int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv) {
             }
             break;
 #endif
+        case OPT_UPSTREAM_ADDR:
+            // Parse upstream address.
+            if(parse_sockaddr(&cmdline->upstream_addr, optarg) < 0) {
+                perror("parse_sockaddr");
+                return -1;
+            }
+            break;
+#ifdef CMDLINE_WORKER
+        case OPT_IPC_BROADCAST:
+            // Parse IPC file descriptor.
+            if((cmdline->ipc_broadcast = atofd(optarg, argv[0])) < 0) {
+                return -1;
+            }
+            break;
+        case OPT_IPC_DIRECT:
+            // Parse IPC file descriptor.
+            if((cmdline->ipc_direct = atofd(optarg, argv[0])) < 0) {
+                return -1;
+            }
+            break;
+#endif
+#ifdef CMDLINE_LISTENER
         case OPT_LISTEN_FD:
             // Parse and append listening file descriptor.
             {
@@ -267,7 +302,6 @@ int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv) {
                 }
             }
             break;
-#ifdef CMDLINE_LISTENER
         case OPT_LISTEN_ADDR:
             // Parse and append listening address.
             {
@@ -282,7 +316,6 @@ int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv) {
                 }
             }
             break;
-#endif
         case OPT_NUM_WORKERS:
             // Parse number of workers.
             {
@@ -300,38 +333,36 @@ int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv) {
                 }
             }
             break;
-#ifdef CMDLINE_WORKER
-        case OPT_IPC_FD:
-            // Parse IPC file descriptor.
-            if((cmdline->ipc_fd = atofd(optarg, argv[0])) < 0) {
-                return -1;
-            }
-            break;
-#endif
-        case OPT_PID_FD:
-            // Parse PID file descriptor.
-            if((cmdline->parent_pidfd = atofd(optarg, argv[0])) < 0) {
-                return -1;
-            }
-            break;
         case OPT_LISTENER_BIN:
             cmdline->listener = optarg;
             break;
         case OPT_WORKER_BIN:
             cmdline->worker = optarg;
             break;
+#endif
         case OPT_HELP:
             help(stdout, argv[0]);
             exit(0);
             __builtin_trap();
         default:
             fprintf(stderr, "%s: cannot parse command line\n", argv[0]);
-            // fall through
+            __attribute__((fallthrough));
         case OPT_UNKNOWN:
             usage(stderr, argv[0]);
             return -1;
         }
     }
+
+#ifdef CMDLINE_WORKER
+    if(cmdline->ipc_direct < 0) {
+        fprintf(stderr, "%s: missing required option: --ipc-direct\n", argv[0]);
+        return -1;
+    }
+    if(cmdline->upstream_addr.ss_family == (sa_family_t)-1) {
+        fprintf(stderr, "%s: missing required option: --upstream-address\n", argv[0]);
+        return -1;
+    }
+#endif
 
 #ifndef SHARED_MEMORY_RELOCATABLE
     if((cmdline->shared_mem_fd == -1) ^ (cmdline->shared_mem_addr == NULL)) {
@@ -422,45 +453,5 @@ static int argv_append(char ***argv, const char *fmt, ...) {
     (*argv)[argc] = last;
     (*argv)[argc + 1] = NULL;
 
-#if 0
-    fputs("argv_append: ", stderr);
-    for(size_t i = 0; i <= argc; ++i) {
-        fputs((*argv)[i], stderr);
-        fputc(i < argc ? ' ' : '\n', stderr);
-    }
-#endif
-
     return 0;
-}
-
-char **cmdline_to_argv(const struct cmdline_opts *cmdline, const char *argv0, int ipc_fd) {
-    char **argv = NULL;
-    if(
-        0
-#ifdef USE_VALGRIND
-        || argv_append(&argv, "valgrind") < 0
-#endif
-        || argv_append(&argv, "%s", argv0) < 0
-        || argv_append(&argv, "--listener=%s", cmdline->listener) < 0
-        || argv_append(&argv, "--worker=%s", cmdline->worker) < 0
-        || argv_append(&argv, "--num-workers=%u", cmdline->num_workers) < 0
-        || argv_append(&argv, "--shared-memory-fd=%d", cmdline->shared_mem_fd) < 0
-#ifndef SHARED_MEMORY_RELOCATABLE
-        || argv_append(&argv, "--shared-memory-addr=%p", (void *)cmdline->shared_mem_addr) < 0
-#endif
-        || argv_append(&argv, "--ipc-fd=%d", ipc_fd) < 0
-        || (cmdline->parent_pidfd >= 0 && argv_append(&argv, "--parent-pidfd=%d", cmdline->parent_pidfd) < 0)
-    ) {
-        goto error;
-    }
-    for(size_t i = 0; i < cmdline->num_listen_fds; ++i) {
-        if(argv_append(&argv, "--listen-fd=%d", cmdline->listen_fds[i]) < 0) {
-            goto error;
-        }
-    }
-    return argv;
-
-error:
-    free(argv);
-    return NULL;
 }

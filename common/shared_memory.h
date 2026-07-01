@@ -3,9 +3,17 @@
 
 #include <stdatomic.h>
 
+#include "../common/util.h" // _Static_assert
 #include "../worker/atomic_send_recv.h" // struct atomic_ring_buffer
+#include "../worker/transform.h" // transformation_state_t
 
 enum {
+    /**
+     * Only the lower bits encode the actual connection state. And with
+     * `connection::state` to get actual connection state.
+     */
+    CONN_STATE_BITS = 0xFF,
+    /** Connection is unused. */
     CONN_UNUSED = 0,
     /** accept(2) is about to be called on this connection. */
     CONN_ACCEPTING,
@@ -13,17 +21,17 @@ enum {
     CONN_CONNECTING,
     /** Receive and transform more data. */
     CONN_POLL,
-    /** Drain `tx` buffers then close the connection. */
-    CONN_DRAIN,
+    /**
+     * Swap active ranges of the `rx`/`tx` buffers encoded in higher bits,
+     * see `swap_buffers` and `handle_connection`.
+     */
+    CONN_SWAP_BUFFERS,
     /** close(2) is about to be called on all file descriptors. */
     CONN_CLOSING,
     /** Set `SO_LINGER` then close(2) the all file descriptors. */
     CONN_ERROR,
-    /**
-     * Swap active ranges of the `rx`/`tx` buffers.
-     */
-    CONN_SWAP_BUFFERS = 0xFF,
 };
+_Static_assert(CONN_ERROR <= CONN_STATE_BITS, "connection state does not fit in the lower bits");
 
 /**
  * File descriptors will differ in the two processes. `fd_pair_t[0]` refers to
@@ -37,8 +45,14 @@ struct connection_endpoint {
     struct sockaddr_storage addr;
     /** Remote address of the incoming connection, set by `accept(2)`. */
     socklen_t addrlen;
-    /** EOF received on this file descriptor. */
-    int eof;
+    /**
+     * Bitmask of `1 << SHUT_WR` and `1 << SHUT_RD`.
+     * If `1 << SHUT_WR` is set then `shutdown(SHUT_WR)` will be called once the
+     * `tx` buffer is drained.
+     * If `1 << SHUT_RD` is set EOF was reached (or `shutdown(SHUT_RD)` was
+     * called).
+     */
+    int shutdown;
     /** Received data. */
     struct atomic_ring_buffer rx;
     /** Pending data to send. */
@@ -48,6 +62,8 @@ struct connection_endpoint {
 struct connection {
     /** State of the connection. */
     atomic_int state;
+    /** Arbitrary data for `transform`. */
+    transformation_context_t transform_ctx;
     /** Accepted connection. */
     struct connection_endpoint downstream;
     /** Outgoing connection. */
