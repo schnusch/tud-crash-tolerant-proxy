@@ -44,11 +44,16 @@
 % The logo is set \AtBeginDocument so \tud@layer@main@black must be overridden
 % after.
 \AtBeginDocument{%
+    %% Un-comment to underlay the old image.
+    %\expandafter \let \expandafter \old \csname tud@layer@main@black\endcsname
     \csname tud@savelayerbox\endcsname{main@black}{%
+        %\rlap{\usebox \old}%
+        \hspace{-.04\csname tud@dim@mainlogoheight\endcsname}%
         \includegraphics[
             keepaspectratio,
             height=\csname tud@dim@mainlogoheight\endcsname,
-            viewport={6.2mm 4.546mm 71.224mm 26.202mm},
-        ]{TUD Logo__eps CMYK/schwarz/TUD_Logos_final_CMYK_TUD_Logo_horizontal_schwarz_en.eps}%
+            trim={6.2mm 6.2mm 6.2mm 6.2mm},
+            clip=false,% Do not clip descenders.
+        ]{TUD Logo__eps RGB/schwarz/TUD_Logos_final_RGB_TUD_Logo_horizontal_schwarz_en.eps}% CMYK does not use true black.
     }%
 }
