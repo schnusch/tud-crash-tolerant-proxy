@@ -1,17 +1,7 @@
 % Replace Open Sans with Noto Sans.
 \AtBeginDocument{
     % Load "Noto Sans" and define `\notosans`.
-    \usepackage[
-        nott,      % do not load not monospace
-        sf,        % only load sans-serif
-        sfdefault, % activate sans-serif
-        % numerals
-        lining,
-        tabular,
-        % light font
-        light,
-        semibold,
-    ]{noto}
+    \input{noto.tex}
     % Overwrite tudscr's internal font macro `tud@cdfont@fam@lf` with `\notosans`.
     % \tempa = tud@x@fontspec@fam@*\tud@cdfont@fam@lf
     \edef\tempa{tud@x@fontspec@fam@\csname tud@cdfont@fam@lf\endcsname }%

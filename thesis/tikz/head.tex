@@ -1,0 +1,30 @@
+\usetikzlibrary{calc}
+
+% Macros for creating an annotated bit field.
+\makeatletter
+\newcommand{\bitfield@field}[2]{%
+    \node[anchor=base west,inner sep=0.1ex,font=\ttfamily] (#1) at (bitfield@previous) {#2};
+    \coordinate (bitfield@previous) at ($(#1.base east) + (0.2ex,0)$);
+    \coordinate (bitfield@labelpos) at ($(bitfield@previous) + (0,-\baselineskip)$);
+}
+\newcommand{\bitfield@bracket}[3][]{%
+    \if\relax\detokenize{#1}\relax
+        \bitfield@bracket[#2]{#2}{#3}%
+    \else
+        \draw
+            (#1.base west)
+            -- ++(0,-0.5ex)
+            -- ($(#2.base east) + (0,-0.5ex)$) coordinate[midway] (mid)
+            -- (#2.base east);%
+        \draw (mid) |- ($(bitfield@labelpos) + (0,0.8ex)$);
+        \node[anchor=base west] (label) at (bitfield@labelpos) {#3};
+        \coordinate (bitfield@labelpos) at ($(label.base west) + (0,-\baselineskip)$);
+    \fi
+}
+\newenvironment{bitfield}[1][0,0]{%
+    \coordinate (bitfield@previous) at (#1);%
+    \coordinate (bitfield@labelpos) at (bitfield@previous);%
+    \let \field \bitfield@field
+    \let \bracket \bitfield@bracket
+}{}
+\makeatother
