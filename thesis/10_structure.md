@@ -36,6 +36,8 @@
 
 #### Transformation
 
+![Connection state: `CONN_SWAP_BUFFERS`](tikz/CONN_SWAP_BUFFERS.tex)
+
 # Evaluation
 
 ## Limitations

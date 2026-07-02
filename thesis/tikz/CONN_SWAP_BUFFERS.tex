@@ -1,0 +1,19 @@
+\begin{tikzpicture}
+    \begin{bitfield}
+        %\field{unused}{state}
+        %\field{unused}{==}
+        \field{unused}{\ldots}
+        \field{upstream-tx}{1}
+        \field{upstream-rx}{0}
+        \field{downstream-tx}{1}
+        \field{downstream-rx}{0}
+        \field{eight}{\tiny \raisebox{-.5\height}{8}}
+        \field{b0}{11111111}
+        \field{zero}{\tiny \raisebox{-.5\height}{0}}
+        \bracket{b0}{\ttfamily            CONN\_SWAP\_BUFFERS}
+        \bracket{downstream-rx}{\ttfamily downstream.rx.active := 0}
+        \bracket{downstream-tx}{\ttfamily downstream.tx.active := 1}
+        \bracket{upstream-rx}{\ttfamily   upstream.rx.active := 0}
+        \bracket{upstream-tx}{\ttfamily   upstream.tx.active := 1}
+    \end{bitfield}
+\end{tikzpicture}
