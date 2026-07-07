@@ -11,6 +11,14 @@ jobs:
       with:
         submodules: recursive
     - uses: cachix/install-nix-action@v31
+    - run: >-
+        GIT_BUNDLE="tmp/tex/crash-tolerant-proxy-$(git rev-parse --verify --short ${{ github.ref }}).bundle"
+        && cd thesis
+        && mkdir -p "$(dirname "$GIT_BUNDLE")"
+        && git fetch --unshallow
+        && git bundle create "$GIT_BUNDLE" ${{ github.ref }}
+        && git add --force --intent-to-add "$GIT_BUNDLE"
+        && sed -e "/^PDF_ATTACHMENTS = \\\\$/ a $GIT_BUNDLE \\\\" -i GNUmakefile
     - run: nix build -L ./thesis#default
     - uses: actions/upload-artifact@v4
       with:
