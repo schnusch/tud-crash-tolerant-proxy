@@ -3,13 +3,13 @@ PREREQS = \
 	../obj/common/util.o \
 	../obj/common/shared_memory.o \
 	../obj/listener/cmdline.o \
-	../obj/listener/fd_map.o \
+	../obj/listener/fd_info.o \
+	../obj/listener/worker_process.o \
 	../obj/worker/atomic_send_recv.o
 
 OBJS = \
 	atomic.o \
 	cmdline.o \
-	fd_map.o \
 	ipc.o \
 	util.o \
 	worker.o
@@ -40,4 +40,6 @@ main: main.o $(OBJS) $(PREREQS)
 	@mkdir -p $(@D)
 	@printf 'DEP\t%s\n' $< >&2
 	@$(CXX) $(final_cppflags) -MM -MF $@ -MT '$(@:.d=.o) $@' $<
+ifneq ($(MAKECMDGOALS),clean)
 -include main.d $(WORKER_OBJS:.o=.d)
+endif

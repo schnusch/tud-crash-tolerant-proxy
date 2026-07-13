@@ -29,7 +29,7 @@ final_ldflags = $(LDFLAGS) $(EXTRA_LDFLAGS)
 
 # internal varibales
 
-COMMON_SRCS = $(filter-out common/cmdline.c,$(shell find common -xtype f -name '*.c'))
+COMMON_SRCS = $(shell find common -xtype f -name '*.c')
 
 LISTENER_SRCS = $(shell find listener -xtype f -name '*.c') $(COMMON_SRCS)
 LISTENER_OBJS = $(patsubst %.c,obj/%.o,$(LISTENER_SRCS))
@@ -98,4 +98,6 @@ obj/%.d: %.c
 	@mkdir -p $(@D)
 	@printf 'DEP\t%s\n' $< >&2
 	@$(CC) $(final_cppflags) -MM -MF $@ -MT '$(@:.d=.o) $@' $<
+ifneq ($(MAKECMDGOALS),clean)
 -include $(LISTENER_OBJS:.o=.d) $(WORKER_OBJS:.o=.d)
+endif

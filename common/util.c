@@ -144,7 +144,7 @@ ssize_t recv_fd(int sock, void *buf, size_t size, int *fd, int flags) {
             if(*fd < 0) {
                 *fd = received_fd;
             } else {
-                close(received_fd);
+                closep(&received_fd);
             }
         }
     }
@@ -453,7 +453,7 @@ cleanup:
     if(d) {
         closedir(d);
     } else {
-        close(dir_fd);
+        closep(&dir_fd);
     }
     errno = errnum;
     return rc;
@@ -562,12 +562,26 @@ char *epoll_str(char *buf, size_t size, uint32_t events) {
     return str_bits(bits, buf, size, events);
 }
 
-void closep(int *fd) {
-    int errbak = errno;
-    if(close(*fd) < 0) {
-        perror("close");
-    } else {
+int closep(int *fd) {
+    if(*fd < 0) {
+        return 0;
+    }
+    int e = close(*fd);
+    // > Retrying the close() after a failure return is the wrong thing to do,
+    // > since this may cause a reused file descriptor from another thread to
+    // > be closed.
+    // see "Dealing with error returns from close()" at
+    // https://man7.org/linux/man-pages/man2/close.2.html#CAVEATS
+    if(e == 0 || errno != EBADF) {
         *fd = -1;
+    }
+    return e;
+}
+
+void closep_no_error(int *fd) {
+    int errbak = errno;
+    if(closep(fd) < 0) {
+        perror("close");
     }
     errno = errbak;
 }

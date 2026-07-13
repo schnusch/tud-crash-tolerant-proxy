@@ -8,8 +8,10 @@
 #include <sys/signalfd.h>
 #include <unistd.h>
 
-#include "cmdline.h"
 #include "atomic_send_recv.h"
+#include "cmdline.h"
+#include "fd_info.h"
+#include "../common/accept.h"
 #include "../common/ipc.h"
 #include "../common/shared_memory.h"
 #include "../common/util.h"
@@ -84,26 +86,6 @@ static void change_state(size_t slot, atomic_int *state, int new_state) {
 }
 
 /**
- * Data associated with epoll-ed file descriptors.
- */
-struct fd_info {
-    /** Type of the file descriptor. */
-    enum {
-        FD_TYPE_UNKNOWN = 0,
-        /** IPC socket */
-        FD_TYPE_IPC,
-        /** Signal FD */
-        FD_TYPE_SIGNAL,
-        /** Connection of the proxy. */
-        FD_TYPE_CONN,
-    } type;
-    /** epoll events currently registered for `fd`. */
-    uint32_t events;
-    /** Used by `shared_memory_get_connection`. */
-    size_t slot;
-};
-
-/**
  * Global variables.
  */
 struct context {
@@ -122,27 +104,10 @@ struct context {
 };
 
 /**
- * \return associated data for file descriptor `fd`
- */
-static struct fd_info *fd_info_get(struct context *ctx, int fd) {
-    while((size_t)fd >= ctx->num_fds) {
-        static const struct fd_info empty = {
-            .type = FD_TYPE_UNKNOWN,
-            .events = 0,
-            .slot = -1,
-        };
-        if(array_append((void **)&ctx->fd_info, &ctx->num_fds, &empty, sizeof(empty)) < 0) {
-            return NULL;
-        }
-    }
-    return &ctx->fd_info[fd];
-}
-
-/**
  * Update epoll events for `fd` according to `events` and `fd_info::events`.
  */
 static int epoll_mod(struct context *ctx, int fd, uint32_t events) {
-    struct fd_info *info = fd_info_get(ctx, fd);
+    struct fd_info *info = fd_info_get(&ctx->fd_info, &ctx->num_fds, fd);
     assert(info);
     if(events == info->events) {
         return 0;
@@ -168,7 +133,7 @@ static int epoll_mod(struct context *ctx, int fd, uint32_t events) {
  * Set epoll events according to `rx` and `tx` buffers.
  */
 static int epoll_from_buffers(struct context *ctx, struct connection_endpoint *endpoint) {
-    struct fd_info *info = fd_info_get(ctx, endpoint->fd[1]);
+    struct fd_info *info = fd_info_get(&ctx->fd_info, &ctx->num_fds, endpoint->fd[1]);
     assert(info);
     uint32_t events = 0;
     if(ACTIVE_RANGE(&endpoint->tx)->len > 0) {
@@ -237,7 +202,7 @@ static inline void copy_active_ranges(struct connection *conn) {
         ++pbuf
     ) {
         memcpy(
-            &(*pbuf)->ranges[!(*pbuf)->active],
+            INACTIVE_RANGE(*pbuf),
             ACTIVE_RANGE(*pbuf),
             sizeof(*ACTIVE_RANGE(*pbuf))
         );
@@ -273,7 +238,7 @@ static int swap_buffers(struct context *ctx, struct connection *conn) {
  * \return -1 on fatal errors, should cause the process to exit
  */
 static int handle_connection(struct context *ctx, int fd, uint32_t events) {
-    struct fd_info *info = fd_info_get(ctx, fd);
+    struct fd_info *info = fd_info_get(&ctx->fd_info, &ctx->num_fds, fd);
     assert(info);
 
     char str[512];
@@ -396,17 +361,17 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
         copy_active_ranges(conn);
         struct transformation_direction down = {
             .out_buf = conn->downstream.tx.buf,
-            .out_range = &conn->downstream.tx.ranges[!conn->downstream.tx.active],
+            .out_range = INACTIVE_RANGE(&conn->downstream.tx),
             .in_buf = conn->upstream.rx.buf,
-            .in_range = &conn->upstream.rx.ranges[!conn->upstream.rx.active],
+            .in_range = INACTIVE_RANGE(&conn->upstream.rx),
             .eof = !!(conn->upstream.shutdown & (1 << SHUT_RD)),
             .shutdown = !!(conn->downstream.shutdown & (1 << SHUT_WR)),
         };
         struct transformation_direction up = {
             .out_buf = conn->upstream.tx.buf,
-            .out_range = &conn->upstream.tx.ranges[!conn->upstream.tx.active],
+            .out_range = INACTIVE_RANGE(&conn->upstream.tx),
             .in_buf = conn->downstream.rx.buf,
-            .in_range = &conn->downstream.rx.ranges[!conn->downstream.rx.active],
+            .in_range = INACTIVE_RANGE(&conn->downstream.rx),
             .eof = !!(conn->downstream.shutdown & (1 << SHUT_RD)),
             .shutdown = !!(conn->upstream.shutdown & (1 << SHUT_WR)),
         };
@@ -419,7 +384,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
         prefix, \
         #which, \
         ACTIVE_RANGE(&conn->which)->len, \
-        conn->which.ranges[!conn->which.active].len \
+        INACTIVE_RANGE(&conn->UP_DOWN.RX_TX)->len \
     )
         LOG_LEN("transform:", downstream.rx);
         LOG_LEN("          ", upstream.tx);
@@ -438,9 +403,9 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
         // Both directions were shutdown and send buffers are empty.
         if(
             (conn->downstream.shutdown & (1 << SHUT_WR))
-            && conn->downstream.tx.ranges[!conn->downstream.tx.active].len == 0
+            && INACTIVE_RANGE(&conn->downstream.tx)->len == 0
             && (conn->upstream.shutdown & (1 << SHUT_WR))
-            && conn->upstream.tx.ranges[!conn->upstream.tx.active].len == 0
+            && INACTIVE_RANGE(&conn->upstream.tx)->len == 0
         ) {
             int r;
             change_state(info->slot, &conn->state, CONN_CLOSING);
@@ -526,6 +491,9 @@ static int ipc_connected(const char *action, size_t slot, int fd, const char *ta
         );
         return -2;
     }
+    if(fd_cloexec(fd, 0) < 0) {
+        perror("fcntl(F_SETFD)");
+    }
 
     conn->downstream.rx = ATOMIC_RING_BUFFER_INIT;
     conn->downstream.tx = ATOMIC_RING_BUFFER_INIT;
@@ -536,9 +504,8 @@ static int ipc_connected(const char *action, size_t slot, int fd, const char *ta
     struct fd_info *info;
 
     // Register downstream connection with epoll.
-    info = fd_info_get(ctx, conn->downstream.fd[1]);
+    info = fd_info_get(&ctx->fd_info, &ctx->num_fds, conn->downstream.fd[1]);
     if(!info) {
-        // `struct fd_info` cannot be allocated. Exit the worker.
         perror("realloc");
         return -2;
     }
@@ -553,9 +520,8 @@ static int ipc_connected(const char *action, size_t slot, int fd, const char *ta
     }
 
     // Register upstream connection with epoll.
-    info = fd_info_get(ctx, conn->upstream.fd[1]);
+    info = fd_info_get(&ctx->fd_info, &ctx->num_fds, conn->upstream.fd[1]);
     if(!info) {
-        // `struct fd_info` cannot be allocated. Exit the worker.
         perror("realloc");
         return -2;
     }
@@ -629,7 +595,11 @@ static int ipc_accepted(const char *action, size_t slot, int fd, const char *tai
         );
         return -2;
     }
+    if(fd_cloexec(fd, 0) < 0) {
+        perror("fcntl(F_SETFD)");
+    }
 
+    conn->worker_pid = getpid();
     conn->downstream.fd[1] = fd;
     change_state(slot, &conn->state, CONN_CONNECTING);
 
@@ -686,7 +656,7 @@ int main(int argc, char **argv) {
     struct fd_info *info;
 
     // Poll direct IPC socket.
-    info = fd_info_get(&ctx, ctx.ipc_fd);
+    info = fd_info_get(&ctx.fd_info, &ctx.num_fds, ctx.ipc_fd);
     if(!info) {
         perror("realloc");
         return 1;
@@ -702,7 +672,7 @@ int main(int argc, char **argv) {
 
     // Poll broadcast IPC socket.
     if(cmdline.ipc_broadcast >= 0) {
-        info = fd_info_get(&ctx, cmdline.ipc_broadcast);
+        info = fd_info_get(&ctx.fd_info, &ctx.num_fds, cmdline.ipc_broadcast);
         if(!info) {
             perror("realloc");
             return 1;
@@ -731,7 +701,7 @@ int main(int argc, char **argv) {
         perror("sigprocmask");
         return 1;
     }
-    info = fd_info_get(&ctx, sigfd);
+    info = fd_info_get(&ctx.fd_info, &ctx.num_fds, sigfd);
     if(!info) {
         perror("realloc");
         return 1;
@@ -756,10 +726,10 @@ int main(int argc, char **argv) {
 
         for(size_t i = 0; i < (size_t)num_events; ++i) {
             const int fd = evs[i].data.fd;
-            info = fd_info_get(&ctx, fd);
+            struct fd_info unknown = { .type = FD_TYPE_UNKNOWN };
+            info = fd_info_get(&ctx.fd_info, &ctx.num_fds, fd);
             if(!info) {
-                perror("realloc");
-                return 1;
+                info = &unknown;
             }
 
             switch(info->type) {

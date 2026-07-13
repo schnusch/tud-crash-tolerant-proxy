@@ -62,6 +62,8 @@ struct connection_endpoint {
 struct connection {
     /** State of the connection. */
     atomic_int state;
+    /** PID of the worker process. */
+    pid_t worker_pid;
     /** Arbitrary data for `transform`. */
     transformation_context_t transform_ctx;
     /** Accepted connection. */
@@ -116,7 +118,7 @@ int shared_memory_truncate(struct shared_memory_mapping *map, size_t size);
 /**
  * Get the existing `struct connection` and index `slot`.
  */
-struct connection *shared_memory_get_connection(const struct shared_memory_mapping *map, size_t slot);
+struct connection *shared_memory_get_connection(struct shared_memory_mapping *map, size_t slot);
 
 /**
  * Get the existing `struct connection` and index `slot` or append new
