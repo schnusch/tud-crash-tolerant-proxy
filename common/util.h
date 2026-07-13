@@ -6,6 +6,7 @@
 #endif
 
 #include <arpa/inet.h>
+#include <limits.h>
 #include <stddef.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -16,9 +17,16 @@
  */
 extern int log_level;
 
+/**
+ * Set `log_level` from environment variable `$LOG_LEVEL`.
+ */
+void init_log_level(void);
+
 enum {
-    LOG_ALWAYS = -1,
-    // TODO
+    LOG_ALWAYS = INT_MIN,
+    LOG_ERROR = -1,
+    LOG_INFO = 0,
+    LOG_DEBUG,
 };
 
 /**
@@ -26,8 +34,8 @@ enum {
  */
 void _log(int level, const char *filename, unsigned int lineno, const char *func, const char *fmt, ...);
 
-#define LOG(...) _log(LOG_ALWAYS, __FILE__, __LINE__, __func__, __VA_ARGS__)
-#define perror(s) (LOG(""), perror(s))
+#define LOG(LEVEL, ...) _log(LEVEL, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define perror(s) LOG(LOG_ALWAYS, "%s: %s\n", (s), strerror(errno))
 
 /**
  * Repeat the syscall `CALL` if it returned `< 0` and set errno to `EINTR`. The

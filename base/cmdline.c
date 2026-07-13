@@ -460,7 +460,7 @@ int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv) {
         *p++ = ' ';
     }
     p[-1] = '\0';
-    LOG("$ %s\n", str_argv);
+    LOG(LOG_DEBUG, "$ %s\n", str_argv);
     list_fds("parse_cmdline");
 #endif
 

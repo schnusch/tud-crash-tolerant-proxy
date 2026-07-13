@@ -115,7 +115,7 @@ static int extract_one_fd(struct msghdr *msg) {
         }
     }
     if(num_received > 1) {
-        LOG("received %zu file descriptors instead of 1, closed %zu\n", num_received, num_closed);
+        LOG(LOG_ERROR, "received %zu file descriptors instead of 1, closed %zu\n", num_received, num_closed);
     }
     return fd;
 }
@@ -162,7 +162,7 @@ int ipc_process_incoming(
             return -1;
         } else if(n == sizeof(buf)) {
             // Message might be truncated, ignore.
-            LOG("ignoring potentially truncated IPC message: %.*s\n", (int)n, buf);
+            LOG(LOG_ERROR, "ignoring potentially truncated IPC message: %.*s\n", (int)n, buf);
             continue; // Poor-man's tail recursion.
         }
 
@@ -173,13 +173,13 @@ int ipc_process_incoming(
         received_fd = extract_one_fd(&msg);
 
         // Parse message.
-        LOG("received IPC message: %s\n", buf);
+        LOG(LOG_DEBUG, "received IPC message (fd=%d): %s\n", received_fd, buf);
         ssize_t action_len = -1;
         size_t slot = -1;
         ssize_t consumed = -1;
         int num_scanned = sscanf(buf, "%*s%zn slot=%zu%zn", &action_len, &slot, &consumed);
         if(num_scanned < 1 || num_scanned == EOF) {
-            LOG("ignoring unparseable IPC message: %s\n", buf);
+            LOG(LOG_ERROR, "ignoring unparseable IPC message: %s\n", buf);
             continue; // Poor-man's tail recursion.
         } else if(action_len < 0 || consumed < 0) {
             errno = ENOTSUP;

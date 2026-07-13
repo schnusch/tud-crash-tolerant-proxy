@@ -17,7 +17,23 @@
 
 #include "util.h"
 
-int log_level = 0;
+#ifndef DEFAULT_LOG_LEVEL
+#define DEFAULT_LOG_LEVEL INT_MAX
+#endif
+int log_level = DEFAULT_LOG_LEVEL;
+
+void init_log_level(void) {
+    const char *level = getenv("LOG_LEVEL");
+    if(!level) {
+        return;
+    }
+    int e;
+    log_level = strtol_limit(&e, level, INT_MIN, INT_MAX);
+    if(e) {
+        perror("strtol");
+        log_level = DEFAULT_LOG_LEVEL;
+    }
+}
 
 void _log(int level, const char *filename, unsigned int lineno, const char *func, const char *fmt, ...) {
     if(level > log_level) {
@@ -248,7 +264,9 @@ int parse_sockaddr(struct sockaddr_storage *addr, const char *str_addr) {
     if(*str_addr == '[') {
         // format [::1]:12345
         struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)addr;
-        in6->sin6_family = AF_INET6;
+        *in6 = (struct sockaddr_in6){
+            .sin6_family = AF_INET6,
+        };
 
         ++str_addr;
         str_port = strchr(str_addr, ']');
@@ -433,6 +451,7 @@ int list_fds(const char *prefix) {
         };
         char str_flags[512];
         LOG(
+            LOG_ALWAYS,
             "%s"
             "%s"
             "fd=%d"
