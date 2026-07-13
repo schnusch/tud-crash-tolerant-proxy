@@ -170,9 +170,15 @@ char *str_bits(const struct str_bit *bits, char *buf, size_t size, uint64_t even
 char *epoll_str(char *buf, size_t size, uint32_t events);
 
 /**
- * Close file descriptor `*fd`. `*fd` is set to `-1` on success. Errors are
- * logged with `perror`. Useful with `__attribute__((cleanup(closep)))`.
+ * Close file descriptor `*fd` if `*fd` is non-negative. Then `*fd` is set to
+ * a negative value.
  */
-void closep(int *fd);
+int closep(int *fd);
+
+/**
+ * Calls `closep`. Errors are logged with `perror`, previous `errno` is
+ * preserved. Useful with `__attribute__((cleanup(closep)))`.
+ */
+void closep_no_error(int *fd);
 
 #endif

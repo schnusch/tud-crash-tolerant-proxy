@@ -3,7 +3,10 @@
 
 #include <stdio.h>
 
-#include "shared_memory.h"
+#include "../common/shared_memory.h"
+#ifdef CMDLINE_LISTENER
+#include "../listener/worker_process.h"
+#endif
 
 struct cmdline_opts {
     /** File descriptor of the shared memory. */
@@ -24,14 +27,14 @@ struct cmdline_opts {
     int ipc_direct;
 #endif
 #ifdef CMDLINE_LISTENER
-    size_t num_listen_addrs;
-    struct sockaddr_storage *listen_addrs;
     /** Number of items in `listen_fds`. */
     size_t num_listen_fds;
     /** Listening file descriptors. */
     int *listen_fds;
-    /** Number of worker processes. */
-    unsigned int num_workers;
+    size_t num_listen_addrs;
+    struct sockaddr_storage *listen_addrs;
+    int ipc_broadcast[2];
+    struct worker_process_array worker_procs;
     /** Path to the executable of the keeper. */
     const char *listener;
     /** Path to the executable of the worker. */
@@ -50,6 +53,20 @@ void free_cmdline(struct cmdline_opts *cmdline);
  * \return -1 on error
  */
 int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv);
+
+#ifdef CMDLINE_LISTENER
+/**
+ * Convert `cmdline` to a argv array.
+ * \return pointer should be freed with `free(3)`
+ */
+char **cmdline_to_listener_argv(struct cmdline_opts *cmdline);
+
+/**
+ * Convert `cmdline` to a argv array.
+ * \return pointer should be freed with `free(3)`
+ */
+char **cmdline_to_worker_argv(const struct cmdline_opts *cmdline, int ipc_broadcast, int ipc_direct);
+#endif
 
 /**
  * Print command line usage.

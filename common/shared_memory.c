@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <errno.h>
 #include <stdlib.h> // alloca
 #include <sys/mman.h> // memfd_create, mmap
@@ -18,19 +19,19 @@ int shared_memory_open(struct shared_memory_mapping *map, int fd, struct shared_
     static const struct shared_memory init = {
         .size = sizeof(init),
     };
+    static const struct iovec iov = {
+        .iov_base = &init,
+        .iov_len = offsetof(struct shared_memory, connections),
+    };
 
     map->fd = fd;
     if(map->fd < 0) {
-        map->fd = memfd_create("shared_state", 0);
+        map->fd = memfd_create("connections", 0);
         if(map->fd < 0) {
             return -1;
         }
 init:
         // Initialize shared memory.
-        const struct iovec iov = {
-            .iov_base = &init,
-            .iov_len = sizeof(init),
-        };
         if(pwritev_all(map->fd, &iov, 1, 0) < sizeof(init)) {
             goto error;
         }
@@ -40,7 +41,7 @@ init:
         if(fstat(map->fd, &st) < 0) {
             goto error;
         }
-        if(st.st_size < sizeof(init)) {
+        if((size_t)st.st_size < sizeof(init)) {
             goto init;
         }
     }
@@ -62,8 +63,7 @@ init:
 error:
     if(fd < 0) {
         int errnum = errno;
-        close(map->fd);
-        map->fd = -1;
+        closep(&map->fd);
         errno = errnum;
     }
     return -1;
@@ -150,7 +150,10 @@ int shared_memory_append(
     }
 }
 
-struct connection *shared_memory_get_connection(const struct shared_memory_mapping *map, size_t slot) {
+struct connection *shared_memory_get_connection(struct shared_memory_mapping *map, size_t slot) {
+    if(shared_memory_resize(map) < 0) {
+        return NULL;
+    }
     size_t current_length = (map->addr->size - offsetof(struct shared_memory, connections)) / sizeof(*map->addr->connections);
     if(slot >= current_length) {
         return NULL;

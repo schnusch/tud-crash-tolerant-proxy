@@ -1,2 +1,1 @@
-#define CMDLINE_LISTENER
-#include "../common/cmdline.c"
+../base/cmdline.c

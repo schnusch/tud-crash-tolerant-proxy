@@ -2,7 +2,6 @@
 #include <string.h>
 
 #include "atomic_send_recv.h"
-#include "../common/util.h"
 #include "../libcrash/libcrash.h"
 
 /**
@@ -200,8 +199,8 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
     case ATOMIC_SWAP:
         // Left-trim the sent data on the inactive range, then swap the ranges.
         buf->active = !!(state & (1 << 7));
-        buf->ranges[!buf->active] = *ACTIVE_RANGE(buf);
-        ring_buffer_ltrim(&buf->ranges[!buf->active], buf->mm.msg_len);
+        *INACTIVE_RANGE(buf) = *ACTIVE_RANGE(buf);
+        ring_buffer_ltrim(INACTIVE_RANGE(buf), buf->mm.msg_len);
         LIBCRASH_HOOK(atomic_ring_buffer_ltrim(buf, !!buf->active));
         buf->active = !buf->active;
         atomic_store_explicit(
@@ -269,7 +268,7 @@ int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
     case ATOMIC_SWAP:
         // Extend the inactive range to include the received data.
         buf->active = !(state & (1 << 7));
-        buf->ranges[!buf->active] = (struct ring_buffer_range){
+        *INACTIVE_RANGE(buf) = (struct ring_buffer_range){
             .start = ACTIVE_RANGE(buf)->start,
             .len = ACTIVE_RANGE(buf)->len + buf->mm.msg_len,
         };

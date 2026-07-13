@@ -92,6 +92,7 @@ struct atomic_ring_buffer {
  * \return `struct ring_buffer_range *`
  */
 #define ACTIVE_RANGE(b) (&(b)->ranges[!!(b)->active])
+#define INACTIVE_RANGE(b) (&(b)->ranges[!(b)->active])
 
 /**
  * Append `size` bytes from `tail` to `buf`. If there are less than `size` free
