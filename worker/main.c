@@ -77,6 +77,7 @@ more:
 static void change_state(size_t slot, atomic_int *state, int new_state) {
     char old[512], new[512];
     LOG(
+        LOG_DEBUG,
         "slot=%zu state: %s => %s\n",
         slot,
         str_state(old, sizeof(old), atomic_load_explicit(state, memory_order_relaxed)),
@@ -147,6 +148,7 @@ static int epoll_from_buffers(struct context *ctx, struct connection_endpoint *e
     }
     char epoll[512];
     LOG(
+        LOG_DEBUG,
         "slot=%zu epoll: fd=%d%s events=%s\n",
         info->slot,
         endpoint->fd[1],
@@ -154,6 +156,7 @@ static int epoll_from_buffers(struct context *ctx, struct connection_endpoint *e
         epoll_str(epoll, sizeof(epoll), info->events)
     );
     LOG(
+        LOG_DEBUG,
         "slot=%zu     => fd=%d%s events=%s\n",
         info->slot,
         endpoint->fd[1],
@@ -243,6 +246,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
 
     char str[512];
     LOG(
+        LOG_DEBUG,
         "slot=%zu handle_connection(ctx, %d, %s)\n",
         info->slot,
         fd,
@@ -263,7 +267,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
     } else if(fd == conn->downstream.fd[1]) {
         endpoint = &conn->downstream;
     } else {
-        LOG("unknown file descriptor %d\n", fd);
+        LOG(LOG_ERROR, "unknown file descriptor %d\n", fd);
         return -1;
     }
 
@@ -276,15 +280,17 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             size_t old_len = ACTIVE_RANGE(&endpoint->tx)->len;
             do {
                 rc = atomic_send(endpoint->fd[1], &endpoint->tx);
-                LOG("atomic_send(%d, ...) = %d\n", endpoint->fd[1], rc);
+                LOG(LOG_DEBUG, "atomic_send(%d, ...) = %d\n", endpoint->fd[1], rc);
             } while(rc > 0 || (rc < 0 && errno == EINTR));
             LOG(
+                LOG_DEBUG,
                 "slot=%zu send:      %10s.fd[1] = %d\n",
                 info->slot,
                 endpoint == &conn->downstream ? "downstream" : "upstream",
                 endpoint->fd[1]
             );
             LOG(
+                LOG_DEBUG,
                 "slot=%zu            %10s.tx.len = %4zu => %4zu\n",
                 info->slot,
                 endpoint == &conn->downstream ? "downstream" : "upstream",
@@ -305,7 +311,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
                 (endpoint->shutdown & (1 << SHUT_WR))
                 && ACTIVE_RANGE(&endpoint->tx)->len == 0
             ) {
-                LOG("slot=%zu shutdown(%d, SHUT_WR)\n", info->slot, endpoint->fd[1]);
+                LOG(LOG_DEBUG, "slot=%zu shutdown(%d, SHUT_WR)\n", info->slot, endpoint->fd[1]);
                 if(shutdown(endpoint->fd[1], SHUT_WR) < 0 && errno != ENOTCONN) {
                     perror("shutdown");
                     goto error;
@@ -321,15 +327,17 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             size_t old_len = ACTIVE_RANGE(&endpoint->rx)->len;
             do {
                 rc = atomic_recv(endpoint->fd[1], &endpoint->rx);
-                LOG("atomic_recv(%d, ...) = %d\n", endpoint->fd[1], rc);
+                LOG(LOG_DEBUG, "atomic_recv(%d, ...) = %d\n", endpoint->fd[1], rc);
             } while(rc > 0 || (rc < 0 && errno == EINTR));
             LOG(
+                LOG_DEBUG,
                 "slot=%zu recv:      %10s.fd[1] = %d\n",
                 info->slot,
                 endpoint == &conn->downstream ? "downstream" : "upstream",
                 endpoint->fd[1]
             );
             LOG(
+                LOG_DEBUG,
                 "slot=%zu            %10s.rx.len = %4zu => %4zu\n",
                 info->slot,
                 endpoint == &conn->downstream ? "downstream" : "upstream",
@@ -342,7 +350,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
                 // so EPIPE must be handled.
                 || (rc < 0 && errno == EPIPE)
             ) {
-                LOG("slot=%zu            eof=1\n", info->slot);
+                LOG(LOG_DEBUG, "slot=%zu            eof=1\n", info->slot);
                 endpoint->shutdown |= 1 << SHUT_RD;
                 if(shutdown(endpoint->fd[1], SHUT_RD) < 0) {
                     perror("shutdown(SHUT_RD)");
@@ -379,6 +387,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
         int rc = transform(&conn->transform_ctx, &down, &up);
 #define LOG_LEN(prefix, which) \
     LOG( \
+        LOG_DEBUG, \
         "slot=%zu %s %13s.len = %4zu => %4zu\n", \
         info->slot, \
         prefix, \
@@ -427,12 +436,12 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             // will set `SO_LINGER` beforehand.
             // https://ndeepak.com/posts/2016-10-21-tcprst/
             list_fds(__func__);
-            LOG("slot=%zu close(%d)\n", info->slot, conn->upstream.fd[1]);
+            LOG(LOG_INFO, "slot=%zu close(%d)\n", info->slot, conn->upstream.fd[1]);
             if(close(conn->upstream.fd[1]) < 0) {
                 perror("close");
                 r = -1;
             }
-            LOG("slot=%zu close(%d)\n", info->slot, conn->downstream.fd[1]);
+            LOG(LOG_INFO, "slot=%zu close(%d)\n", info->slot, conn->downstream.fd[1]);
             if(close(conn->downstream.fd[1]) < 0) {
                 perror("close");
                 r = -1;
@@ -465,7 +474,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
     default:
         ;
         char str[512];
-        LOG("slot=%zu unsupported state: %s\n", str_state(str, sizeof(str), state));
+        LOG(LOG_ERROR, "slot=%zu unsupported state: %s\n", str_state(str, sizeof(str), state));
         goto error;
     }
 }
@@ -483,6 +492,7 @@ static int ipc_connected(const char *action, size_t slot, int fd, const char *ta
     if(fd < 0) {
         errno = EBADF;
         LOG(
+            LOG_ERROR,
             "no file descriptor received: %s slot=%zu%s%s\n",
             action,
             slot,
@@ -587,6 +597,7 @@ static int ipc_accepted(const char *action, size_t slot, int fd, const char *tai
         // passing the file descriptor will be retried. Another option would be
         // to set the connection to CONN_ERROR and drop the connection.
         LOG(
+            LOG_ERROR,
             "no file descriptor received: %s slot=%zu%s%s\n",
             action,
             slot,
@@ -627,6 +638,8 @@ static void free_context(struct context *ctx) {
 }
 
 int main(int argc, char **argv) {
+    init_log_level();
+
     __attribute__((cleanup(free_cmdline)))
     struct cmdline_opts cmdline = { 0 };
     if(parse_cmdline(&cmdline, argc, argv) < 0) {
@@ -768,7 +781,7 @@ int main(int argc, char **argv) {
                         list_fds(signame(siginfo.ssi_signo));
                         break;
                     default:
-                        LOG("signal %s is currently ignored", signame(siginfo.ssi_signo));
+                        LOG(LOG_ALWAYS, "signal %s is currently ignored", signame(siginfo.ssi_signo));
                         break;
                     }
                 }
@@ -780,7 +793,7 @@ int main(int argc, char **argv) {
                 }
                 break;
             default:
-                LOG("unknown file descriptor %d\n", fd);
+                LOG(LOG_ERROR, "unknown file descriptor %d\n", fd);
                 break;
             }
         }

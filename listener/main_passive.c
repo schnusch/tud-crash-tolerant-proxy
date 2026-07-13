@@ -83,6 +83,8 @@ static int compare_ints(const void *a, const void *b) {
 }
 
 int main_passive(int argc, char **argv) {
+    init_log_level();
+
     __attribute__((cleanup(free_cmdline)))
     struct cmdline_opts cmdline = {
         .listen_fds = NULL,
@@ -202,7 +204,7 @@ int main_passive(int argc, char **argv) {
         } else if(active_pid == 0) {
             _exit(start_listener(&ctx));
         }
-        LOG("active listener process %d started\n", (int)active_pid);
+        LOG(LOG_ALWAYS, "active listener process %d started\n", (int)active_pid);
 
         // Action set by signals.
         enum {
@@ -250,6 +252,7 @@ int main_passive(int argc, char **argv) {
                     }
                     if(WIFSIGNALED(wstatus)) {
                         LOG(
+                            LOG_ALWAYS,
                             "active listener process %d was killed by %s\n",
                             (int)child,
                             signame(WTERMSIG(wstatus))
@@ -257,13 +260,14 @@ int main_passive(int argc, char **argv) {
                         exited = 1;
                     } else if(WIFEXITED(wstatus)) {
                         LOG(
+                            LOG_ALWAYS,
                             "active listener process %d exited with %d\n",
                             (int)child,
                             WEXITSTATUS(wstatus)
                         );
                         exited = 1;
                     } else if(WIFSTOPPED(wstatus) && child == active_pid) {
-                        LOG("active listener process %d was stopped, continuing...\n", (int)child);
+                        LOG(LOG_ALWAYS, "active listener process %d was stopped, continuing...\n", (int)child);
                         if(kill(child, SIGCONT) < 0) {
                             perror("kill");
                             // TODO fatal?
@@ -272,7 +276,7 @@ int main_passive(int argc, char **argv) {
                 }
                 break;
             default:
-                LOG("signal %s is currently ignored\n", signame(signum));
+                LOG(LOG_INFO, "signal %s is currently ignored\n", signame(signum));
                 break;
             }
         }
@@ -290,6 +294,7 @@ int main_passive(int argc, char **argv) {
             free(argv);
         }
         LOG(
+            LOG_ERROR,
             "cannot exec %s continuing with old executable: %s\n",
             cmdline.listener,
             strerror(errno)

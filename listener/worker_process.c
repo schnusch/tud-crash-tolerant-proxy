@@ -2,7 +2,6 @@
 #include <fcntl.h> // O_CLOEXEC
 #include <limits.h> // INT_MAX, PIPE_BUF
 #include <signal.h>
-#include <stdio.h> // perror
 #include <stdlib.h> // free
 #include <sys/epoll.h>
 #include <sys/mman.h> // memfd_create

@@ -125,7 +125,7 @@ int recover_one_fd(struct fd_info **known_fds, size_t *num_known_fds) {
         long l = strtol(e->d_name, &end, 10);
         if((l == LONG_MIN || l == LONG_MAX) && errno != 0) {
         skip:
-            LOG("ignoring /proc/self/fd/%s: %s\n", e->d_name, strerror(errno));
+            LOG(LOG_ERROR, "ignoring /proc/self/fd/%s: %s\n", e->d_name, strerror(errno));
             continue;
         } else if(*end != '\0') {
             errno = EINVAL;
@@ -162,12 +162,12 @@ int recover_one_fd(struct fd_info **known_fds, size_t *num_known_fds) {
             // More than one unknown file descriptor.
             if(unknown_fd >= 0) {
                 list_fds(__func__);
-                LOG("more than one unknown file descriptors: %d\n", unknown_fd);
+                LOG(LOG_ERROR, "more than one unknown file descriptors: %d\n", unknown_fd);
                 if(closep(&unknown_fd) < 0) {
                     perror("close");
                 }
             }
-            LOG("more than one unknown file descriptors: %d\n", fd);
+            LOG(LOG_ERROR, "more than one unknown file descriptors: %d\n", fd);
             if(closep(&fd) < 0) {
                 perror("close");
             }
@@ -233,7 +233,7 @@ static int ipc_connect(const char *action, size_t slot, int fd, const char *tail
 
     // `connect` should not receive a file descriptor.
     if(fd >= 0) {
-        LOG("IPC connect should not received a file descriptor fd=%d\n", fd);
+        LOG(LOG_ERROR, "IPC connect should not received a file descriptor fd=%d\n", fd);
         if(closep(&fd) < 0) {
             perror("close");
         }
@@ -242,6 +242,7 @@ static int ipc_connect(const char *action, size_t slot, int fd, const char *tail
     // Parse upstream address.
     if(!tail || strncmp(tail, "addr=", 5) != 0) {
         LOG(
+            LOG_ERROR,
             "IPC message is missing a 'addr=': %s slot=%zu%s%s\n",
             action,
             slot,
@@ -380,7 +381,7 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
             }
         } else {
             // Poll existing worker process.
-            LOG("worker_process[%zu] = { .ipc_fd = %d, .pid_fd = %d, .pid = %d }\n", i, proc->ipc_fd, proc->pid_fd, proc->pid);
+            LOG(LOG_INFO, "worker_process[%zu] = { .ipc_fd = %d, .pid_fd = %d, .pid = %d }\n", i, proc->ipc_fd, proc->pid_fd, proc->pid);
             if(
                 worker_process_epoll_add(
                     &ctx,
@@ -458,7 +459,7 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
     }
 
     // TODO distribute orphaned connections to workers
-    LOG("distributing orphaned connections...\n");
+    LOG(LOG_INFO, "distributing orphaned connections...\n");
     for(size_t i = 0, n = worker_process_array_len(&cmdline->worker_procs); i < n; ++i) {
         // TODO
     }
@@ -482,7 +483,7 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
 
             switch(info->type) {
             case FD_TYPE_LISTEN:
-                LOG("accepting incoming connection on fd=%d...\n", evs[i].data.fd);
+                LOG(LOG_INFO, "accepting incoming connection on fd=%d...\n", evs[i].data.fd);
                 struct connection *conn = accept_connection(map, evs[i].data.fd);
                 if(!conn) {
                     return 1;
@@ -520,11 +521,11 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
             case FD_TYPE_PID:
                 if(info->slot == (size_t)-1) {
                     // Parent passive process died.
-                    LOG("passive listener terminated\n");
+                    LOG(LOG_ALWAYS, "passive listener terminated\n");
                     // TODO become passive
                 } else if(evs[i].events & EPOLLHUP) {
                     // Worker process was reaped.
-                    LOG("worker process terminated\n");
+                    LOG(LOG_ALWAYS, "worker process terminated\n");
                     // TODO restart
                 }
                 if(close(evs[i].data.fd) < 0) {
@@ -568,18 +569,20 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
                             }
                             if(WIFSIGNALED(wstatus)) {
                                 LOG(
+                                    LOG_ALWAYS,
                                     "process %d was killed by %s",
                                     (int)child,
                                     signame(WTERMSIG(wstatus))
                                 );
                             } else if(WIFEXITED(wstatus)) {
                                 LOG(
+                                    LOG_ALWAYS,
                                     "process %d exited with %d",
                                     (int)child,
                                     WEXITSTATUS(wstatus)
                                 );
                             } else if(WIFSTOPPED(wstatus)) {
-                                LOG("process %d was stopped, continuing...", (int)child);
+                                LOG(LOG_ALWAYS, "process %d was stopped, continuing...", (int)child);
                                 if(kill(child, SIGCONT) < 0) {
                                     perror("kill");
                                     // TODO fatal?
@@ -588,13 +591,13 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
                         }
                         break;
                     default:
-                        LOG("signal %s is currently ignored", signame(siginfo.ssi_signo));
+                        LOG(LOG_INFO, "signal %s is currently ignored", signame(siginfo.ssi_signo));
                         break;
                     }
                 }
                 break;
             default:
-                LOG("unknown file descriptor %d\n", fd);
+                LOG(LOG_ERROR, "unknown file descriptor %d\n", fd);
                 break;
             }
         }
