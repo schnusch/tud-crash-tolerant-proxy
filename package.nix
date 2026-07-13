@@ -14,6 +14,7 @@ stdenv.mkDerivation {
 
   src = lib.sourceFilesBySuffices ./. [
     "GNUmakefile"
+    "Makefile"
     ".c"
     ".cc"
     ".h"
