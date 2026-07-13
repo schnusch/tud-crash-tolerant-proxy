@@ -6,6 +6,7 @@
   gtest,
   pkgconf,
   systemd,
+  valgrind,
 }:
 
 stdenv.mkDerivation {
@@ -19,6 +20,9 @@ stdenv.mkDerivation {
     ".cc"
     ".h"
   ];
+
+  makeFlags = [ "PREFIX=${builtins.placeholder "out"}" ];
+  doCheck = true;
 
   nativeBuildInputs = [
     doxygen
@@ -34,9 +38,8 @@ stdenv.mkDerivation {
 
   checkInputs = [
     gtest
+    valgrind
   ];
-
-  makeFlags = [ "PREFIX=${builtins.placeholder "out"}" ];
 
   passthru.thesis = callPackage ./thesis/package.nix { };
 

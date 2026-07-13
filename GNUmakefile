@@ -65,6 +65,10 @@ install: bin/listener bin/worker
 	install -Dm 755 bin/worker $(DESTDIR)$(PREFIX)/$(WORKER)
 	install -Dm 755 libcrash/nop/libcrash.so $(DESTDIR)$(PREFIX)/lib/libcrash.so
 
+bin/launcher: obj/launcher.o obj/common/util.o
+	@mkdir -p $(@D)
+	$(CC) -o $@ $^
+
 bin/listener: $(LISTENER_OBJS)
 	$(MAKE_LIBCRASH_NOP)
 	@mkdir -p $(@D)
@@ -100,5 +104,5 @@ obj/%.d: %.c
 	@printf 'DEP\t%s\n' $< >&2
 	@$(CC) $(final_cppflags) -MM -MF $@ -MT '$(@:.d=.o) $@' $<
 ifneq ($(MAKECMDGOALS),clean)
--include $(LISTENER_OBJS:.o=.d) $(WORKER_OBJS:.o=.d)
+-include $(LISTENER_OBJS:.o=.d) $(WORKER_OBJS:.o=.d) obj/launcher.d
 endif

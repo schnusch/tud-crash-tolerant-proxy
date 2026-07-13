@@ -40,8 +40,10 @@ static const struct option long_options[] = {
 #ifdef CMDLINE_WORKER
     {"ipc-direct", required_argument, NULL, OPT_IPC_DIRECT},
 #endif
-#ifdef CMDLINE_LISTENER
+#if defined(CMDLINE_LISTENER) || defined(PERFORMANCE_BASELINE)
     {"listen-fd", required_argument, NULL, OPT_LISTEN_FD},
+#endif
+#ifdef CMDLINE_LISTENER
     {"listen", required_argument, NULL, OPT_LISTEN_ADDR},
     {"worker-process", required_argument, NULL, OPT_WORKER_PROCESS},
     {"num-workers", required_argument, NULL, OPT_NUM_WORKERS},
@@ -292,9 +294,11 @@ int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv) {
         (int)-1, // ipc_broadcast
         (int)-1, // ipc_direct
 #endif
-#ifdef CMDLINE_LISTENER
+#if defined(CMDLINE_LISTENER) || defined(PERFORMANCE_BASELINE)
         (size_t)0, // num_listen_fds
         (int *)NULL, // listen_fds
+#endif
+#ifdef CMDLINE_LISTENER
         (size_t)0, // num_listen_addrs
         (struct sockaddr_storage *)NULL, // listen_addrs
         { -1, -1 }, // ipc_broadcast
@@ -368,7 +372,7 @@ int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv) {
             }
             break;
 #endif
-#ifdef CMDLINE_LISTENER
+#if defined(CMDLINE_LISTENER) || defined(PERFORMANCE_BASELINE)
         case OPT_LISTEN_FD:
             // Parse and append listening file descriptor.
             {
@@ -389,6 +393,8 @@ int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv) {
                 }
             }
             break;
+#endif
+#ifdef CMDLINE_LISTENER
         case OPT_LISTEN_ADDR:
             // Parse and append listening address.
             assert(optarg);

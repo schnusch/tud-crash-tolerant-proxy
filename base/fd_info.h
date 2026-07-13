@@ -17,8 +17,13 @@ struct fd_info {
         FD_TYPE_SIGNAL,
         /** Connection of the proxy. */
         FD_TYPE_CONN,
-#ifdef FD_INFO_LISTENER
+#ifdef FD_INFO_WORKER
+        FD_TYPE_CONNECTING,
+#endif
+#if defined(FD_INFO_LISTENER) || defined(PERFORMANCE_BASELINE)
         FD_TYPE_LISTEN,
+#endif
+#ifdef FD_INFO_LISTENER
         FD_TYPE_PID,
         FD_TYPE_STDIO,
 #endif
