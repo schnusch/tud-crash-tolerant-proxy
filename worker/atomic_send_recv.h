@@ -50,6 +50,9 @@ struct ring_buffer_range {
  * `active` is set atomically to switch the active range.
  */
 struct atomic_ring_buffer {
+#ifdef PERFORMANCE_BASELINE
+    struct ring_buffer_range range;
+#else
     /**
      * State machine around `sendmmsg(2)` and `recvmmsg(2)`.
      */
@@ -67,12 +70,19 @@ struct atomic_ring_buffer {
      * after the operation completes the active and inactive ranges are swapped.
      */
     struct ring_buffer_range ranges[2];
+#endif
     /**
      * Buffer shared by the two `atomic_ring_buffer::ranges`.
      */
     char buf[RING_BUFFER_SIZE];
 };
 
+#ifdef PERFORMANCE_BASELINE
+#define ATOMIC_RING_BUFFER_INIT \
+    ((const struct atomic_ring_buffer){ \
+        .range = { .start = 0, .len = 0 }, \
+    })
+#else
 /**
  * Initialization value of `struct atomic_ring_buffer`.
  */
@@ -85,7 +95,12 @@ struct atomic_ring_buffer {
             { .start = 0, .len = 0 }, \
         }, \
     })
+#endif
 
+#ifdef PERFORMANCE_BASELINE
+#define ACTIVE_RANGE(b) (&(b)->range)
+#define INACTIVE_RANGE(b) (&(b)->range)
+#else
 /**
  * Return the currently active `struct ring_buffer_range` of the buffer.
  * \param b `struct atomic_ring_buffer *`
@@ -93,6 +108,7 @@ struct atomic_ring_buffer {
  */
 #define ACTIVE_RANGE(b) (&(b)->ranges[!!(b)->active])
 #define INACTIVE_RANGE(b) (&(b)->ranges[!(b)->active])
+#endif
 
 /**
  * Append `size` bytes from `tail` to `buf`. If there are less than `size` free

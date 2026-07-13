@@ -26,11 +26,13 @@ struct cmdline_opts {
      */
     int ipc_direct;
 #endif
-#ifdef CMDLINE_LISTENER
+#if defined(CMDLINE_LISTENER) || defined(PERFORMANCE_BASELINE)
     /** Number of items in `listen_fds`. */
     size_t num_listen_fds;
     /** Listening file descriptors. */
     int *listen_fds;
+#endif
+#ifdef CMDLINE_LISTENER
     size_t num_listen_addrs;
     struct sockaddr_storage *listen_addrs;
     int ipc_broadcast[2];

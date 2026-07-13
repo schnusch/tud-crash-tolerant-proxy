@@ -212,6 +212,7 @@ static inline void copy_active_ranges(struct connection *conn) {
     }
 }
 
+#ifndef PERFORMANCE_BASELINE
 /**
  * Set active `rx` and `tx` buffers according to `conn::state` and epoll events
  * for the file descriptors.
@@ -230,6 +231,7 @@ static int swap_buffers(struct context *ctx, struct connection *conn) {
     change_state(conn - ctx->map.addr->connections, &conn->state, CONN_POLL);
     return 0;
 }
+#endif
 
 /**
  * 1. Handle pending `CONN_SWAP_BUFFERS`.
@@ -255,10 +257,12 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
 
     struct connection *conn = shared_memory_get_connection(&ctx->map, info->slot);
 
+#ifndef PERFORMANCE_BASELINE
     int state = atomic_load_explicit(&conn->state, memory_order_acquire);
     if((state & CONN_STATE_BITS) == CONN_STATE_BITS && swap_buffers(ctx, conn) < 0) {
         return -1;
     }
+#endif
 
     // Find the buffers belonging to the file descritpro.
     struct connection_endpoint *endpoint;
@@ -271,9 +275,11 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
         return -1;
     }
 
+#ifndef PERFORMANCE_BASELINE
     // Just remeber that case-statements are just goto labels.
     switch(state & CONN_STATE_BITS) {
     case CONN_POLL:
+#endif
         // Send as much data as possible.
         if(events & (EPOLLOUT | EPOLLERR | EPOLLHUP)) {
             int rc;
@@ -366,7 +372,9 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             }
         }
         // Transformation takes place on inactive ranges.
+#ifndef PERFORMANCE_BASELINE
         copy_active_ranges(conn);
+#endif
         struct transformation_direction down = {
             .out_buf = conn->downstream.tx.buf,
             .out_range = INACTIVE_RANGE(&conn->downstream.tx),
@@ -383,22 +391,29 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             .eof = !!(conn->downstream.shutdown & (1 << SHUT_RD)),
             .shutdown = !!(conn->upstream.shutdown & (1 << SHUT_WR)),
         };
+        // Buffers length before transform (for logging).
+#define SAVE_LOG_LEN(UP_DOWN, RX_TX) size_t UP_DOWN##_##RX_TX##_len = INACTIVE_RANGE(&conn->UP_DOWN.RX_TX)->len
+        SAVE_LOG_LEN(downstream, rx);
+        SAVE_LOG_LEN(downstream, tx);
+        SAVE_LOG_LEN(upstream, rx);
+        SAVE_LOG_LEN(upstream, tx);
+#undef SAVE_LOG_LEN
         // Transform from recv buffers to send buffers.
         int rc = transform(&conn->transform_ctx, &down, &up);
-#define LOG_LEN(prefix, which) \
+#define LOG_LEN(prefix, UP_DOWN, RX_TX) \
     LOG( \
         LOG_DEBUG, \
         "slot=%zu %s %13s.len = %4zu => %4zu\n", \
         info->slot, \
         prefix, \
-        #which, \
-        ACTIVE_RANGE(&conn->which)->len, \
+        #UP_DOWN "." #RX_TX, \
+        UP_DOWN##_##RX_TX##_len, \
         INACTIVE_RANGE(&conn->UP_DOWN.RX_TX)->len \
     )
-        LOG_LEN("transform:", downstream.rx);
-        LOG_LEN("          ", upstream.tx);
-        LOG_LEN("transform:", upstream.rx);
-        LOG_LEN("          ", downstream.tx);
+        LOG_LEN("transform:", downstream, rx);
+        LOG_LEN("          ", upstream, tx);
+        LOG_LEN("transform:", upstream, rx);
+        LOG_LEN("          ", downstream, tx);
 #undef LOG_CHANGE
         if(rc < 0) {
             goto error;
@@ -419,14 +434,18 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             int r;
             change_state(info->slot, &conn->state, CONN_CLOSING);
             if(1) {
+#ifndef PERFORMANCE_BASELINE
                 __attribute__((fallthrough));
     case CONN_CLOSING:
+#endif
                 r = 0;
             } else {
     error:
                 change_state(info->slot, &conn->state, CONN_ERROR);
+#ifndef PERFORMANCE_BASELINE
                 __attribute__((fallthrough));
     case CONN_ERROR:
+#endif
                 r = -1;
             }
             // The listener will need to close the file descriptors as well. After
@@ -446,13 +465,26 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
                 perror("close");
                 r = -1;
             }
+#ifdef PERFORMANCE_BASELINE
+            // Do not exit on connection error.
+            return 0;
+#else
             if(ipc_send(ctx->ipc_fd, "close", info->slot, -1, NULL) < 0) {
                 perror("ipc_send");
                 r = -1;
             }
             return r;
+#endif
         }
 
+#ifdef PERFORMANCE_BASELINE
+        if(
+            epoll_from_buffers(ctx, &conn->downstream) < 0
+            || epoll_from_buffers(ctx, &conn->upstream) < 0
+        ) {
+            return -1;
+        }
+#else
         // Encode the buffers used by `transform` in the atomic state, see
         // `swap_buffers`.
         change_state(
@@ -469,14 +501,17 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
         if(swap_buffers(ctx, conn) < 0) {
             return -1;
         }
+#endif
         return 0;
 
+#ifndef PERFORMANCE_BASELINE
     default:
         ;
         char str[512];
         LOG(LOG_ERROR, "slot=%zu unsupported state: %s\n", str_state(str, sizeof(str), state));
         goto error;
     }
+#endif
 }
 
 /**
@@ -563,6 +598,44 @@ static int ipc_connected(const char *action, size_t slot, int fd, const char *ta
  * Send a connect IPC message to the listener.
  */
 static int indirect_connect(struct context *ctx, size_t slot) {
+#ifdef PERFORMANCE_BASELINE
+    // Directly connect, do not use IPC.
+    int fd = socket(ctx->upstream_addr->ss_family, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if(fd < 0) {
+        perror("socket");
+        return -1;
+    }
+    if(connect(fd, (struct sockaddr *)ctx->upstream_addr, sizeof(*ctx->upstream_addr)) == 0) {
+        // Connect finished.
+        if(ipc_connected("connected", slot, fd, NULL, &ctx) == 0) {
+            return 0;
+        } else {
+            return -1;
+        }
+        perror("connect");
+        return -1;
+    } else if(errno == EINPROGRESS) {
+        // Connect is happening asynchronously.
+        struct fd_info *info = fd_info_get(&ctx->fd_info, &ctx->num_fds, fd);
+        if(!info) {
+            perror("realloc");
+            return -1;
+        }
+        *info = (struct fd_info){
+            .type = FD_TYPE_CONNECTING,
+            .slot = slot,
+            .events = 0,
+        };
+        if(epoll_mod(ctx, fd, EPOLLOUT) < 0) {
+            perror("epoll_ctl");
+            return -1;
+        }
+        return 0;
+    } else {
+        perror("connect");
+        return -1;
+    }
+#else
     char str_addr[FORMAT_SOCKADDR_BUFLEN];
     if(
         !format_sockaddr(str_addr, (struct sockaddr *)ctx->upstream_addr)
@@ -572,6 +645,7 @@ static int indirect_connect(struct context *ctx, size_t slot) {
     } else {
         return 0;
     }
+#endif
 }
 
 /**
@@ -668,6 +742,24 @@ int main(int argc, char **argv) {
     }
     struct fd_info *info;
 
+#ifdef PERFORMANCE_BASELINE
+    // Poll listening sockets.
+    for(size_t i = 0; i < cmdline.num_listen_fds; ++i) {
+        info = fd_info_get(&ctx.fd_info, &ctx.num_fds, cmdline.listen_fds[i]);
+        if(!info) {
+            perror("realloc");
+            return 1;
+        }
+        *info = (struct fd_info){
+            .type = FD_TYPE_LISTEN,
+            .events = 0,
+        };
+        if(epoll_mod(&ctx, cmdline.listen_fds[i], EPOLLIN | EPOLLRDHUP) < 0) {
+            perror("epoll_ctl");
+            return 1;
+        }
+    }
+#else
     // Poll direct IPC socket.
     info = fd_info_get(&ctx.fd_info, &ctx.num_fds, ctx.ipc_fd);
     if(!info) {
@@ -699,6 +791,7 @@ int main(int argc, char **argv) {
             return 1;
         }
     }
+#endif
 
     // Handle SIGUSR*.
     sigset_t mask;
@@ -728,6 +821,11 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+#ifdef PERFORMANCE_BASELINE
+    // TODO really necessary?
+    signal(SIGPIPE, SIG_IGN);
+#endif
+
     while(1) {
         struct epoll_event evs[16];
         int num_events;
@@ -746,6 +844,43 @@ int main(int argc, char **argv) {
             }
 
             switch(info->type) {
+#ifdef PERFORMANCE_BASELINE
+            case FD_TYPE_LISTEN:
+                {
+                    struct connection *conn = accept_connection(&ctx.map, evs[i].data.fd);
+                    if(!conn || indirect_connect(&ctx, conn - ctx.map.addr->connections) < 0) {
+                        return 1;
+                    }
+                    conn->downstream.fd[1] = conn->downstream.fd[0];
+                }
+                break;
+            case FD_TYPE_CONNECTING:
+                {
+                    int e;
+                    socklen_t len = sizeof(e);
+                    if(getsockopt(evs[i].data.fd, SOL_SOCKET, SO_ERROR, &e, &len) < 0) {
+                        perror("getsockopt");
+                        return 1;
+                    }
+                    assert(len == sizeof(e));
+                    if(e) {
+                        errno = e;
+                        perror("connect");
+                        return 1;
+                    }
+                    // ipc_connected calls EPOLL_CTL_ADD, so the file descriptor
+                    // has to be un-registered first.
+                    // TODO remove this
+                    if(epoll_mod(&ctx, evs[i].data.fd, 0) < 0) {
+                        perror("epoll_ctl");
+                        return 1;
+                    }
+                    if(ipc_connected("connected", info->slot, evs[i].data.fd, NULL, &ctx) != 0) {
+                        return 1;
+                    }
+                }
+                break;
+#endif
             case FD_TYPE_IPC:
                 // Handle incoming IPC message.
                 switch(ipc_process_incoming(fd, ipc_methods, &ctx)) {

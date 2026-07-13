@@ -151,6 +151,23 @@ size_t ring_buffer_move(
     return copied;
 }
 
+#ifdef PERFORMANCE_BASELINE
+int atomic_send(int fd, struct atomic_ring_buffer *buf) {
+    struct iovec iov[2];
+    ssize_t n = sendmsg(
+        fd,
+        &(struct msghdr){
+            .msg_iov = iov,
+            .msg_iovlen = set_iovec_used(iov, buf),
+        },
+        MSG_DONTWAIT
+    );
+    if(n > 0) {
+        ring_buffer_ltrim(ACTIVE_RANGE(buf), n);
+    }
+    return n;
+}
+#else
 int atomic_send(int fd, struct atomic_ring_buffer *buf) {
     if(ACTIVE_RANGE(buf)->len == 0) {
         return 0;
@@ -211,7 +228,25 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
         return buf->mm.msg_len;
     }
 }
+#endif
 
+#ifdef PERFORMANCE_BASELINE
+int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
+    struct iovec iov[2];
+    ssize_t n = recvmsg(
+        fd,
+        &(struct msghdr){
+            .msg_iov = iov,
+            .msg_iovlen = set_iovec_unused(iov, buf),
+        },
+        MSG_DONTWAIT
+    );
+    if(n > 0) {
+        ACTIVE_RANGE(buf)->len += n;
+    }
+    return n;
+}
+#else
 int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
     struct iovec iov[2];
     int state = atomic_load_explicit(&buf->state, memory_order_acquire);
@@ -282,3 +317,4 @@ int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
         return buf->mm.msg_len;
     }
 }
+#endif
