@@ -63,6 +63,7 @@ clean:
 install: bin/listener bin/worker
 	install -Dm 755 bin/listener $(DESTDIR)$(PREFIX)/$(LISTENER)
 	install -Dm 755 bin/worker $(DESTDIR)$(PREFIX)/$(WORKER)
+	install -Dm 755 libcrash/nop/libcrash.so $(DESTDIR)$(PREFIX)/lib/libcrash.so
 
 bin/launcher: obj/launcher.o obj/common/util.o
 	@mkdir -p $(@D)
