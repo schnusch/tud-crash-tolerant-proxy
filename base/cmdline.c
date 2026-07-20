@@ -467,7 +467,7 @@ int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv) {
     }
     p[-1] = '\0';
     LOG(LOG_DEBUG, "$ %s\n", str_argv);
-    list_fds("parse_cmdline");
+    list_fds(LOG_DEBUG);
 #endif
 
     if(cmdline->upstream_addr.ss_family == (sa_family_t)-1) {

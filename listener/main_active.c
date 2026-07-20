@@ -162,7 +162,7 @@ int recover_one_fd(struct fd_info **known_fds, size_t *num_known_fds) {
         } else {
             // More than one unknown file descriptor.
             if(unknown_fd >= 0) {
-                list_fds(__func__);
+                list_fds(LOG_ERROR);
                 LOG(LOG_ERROR, "more than one unknown file descriptors: %d\n", unknown_fd);
                 if(closep(&unknown_fd) < 0) {
                     perror("close");
@@ -363,7 +363,7 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
     }
     ctx.epfd = epfd;
 
-    list_fds(__func__);
+    list_fds(LOG_ALWAYS);
 
     // Poll existing/start new worker processes.
     for(size_t i = 0, n = worker_process_array_len(&cmdline->worker_procs); i < n; ++i) {
@@ -523,7 +523,7 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
                     switch(siginfo.ssi_signo) {
                     case SIGUSR1:
                     case SIGUSR2:
-                        list_fds(signame(siginfo.ssi_signo));
+                        list_fds(LOG_ALWAYS);
                         break;
                     case SIGCHLD:
                         // Reap worker processes. Worker processes are restarted

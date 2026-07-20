@@ -17,22 +17,119 @@
 
 #include "util.h"
 
+static void print_log_prefix(const char *filename, unsigned int lineno, const char *func) {
+    static const char indent[] = "                                       ";
+    static const char *const indent_end = indent + sizeof(indent) - 1;
+    _Static_assert(sizeof(indent) - 1 >= 39, "indent buffer too small");
+    int n;
+
+    n = fprintf(stderr, "[%d] %s:%d ", (int)getpid(), filename, lineno);
+    if(0 <= n && (size_t)n < 39) {
+        fputs(indent_end - 39 + n, stderr);
+    }
+
+    n = fprintf(stderr, "%s: ", func);
+    if(0 <= n && (size_t)n < 26) {
+        fputs(indent_end - 26 + n, stderr);
+    }
+}
+
+#ifdef USE_LIBBACKTRACE
+#include <backtrace.h>
+
+static struct backtrace_state *bt_state = NULL;
+
+static void bt_error(void *ctx_, const char *msg, int errnum) {
+    (void)ctx_;
+    LOG(LOG_ERROR, "libbacktrace: %s: %s\n", msg, strerror(errnum));
+}
+
+struct backtrace_entry {
+    struct backtrace_entry *next;
+    const char *function;
+    const char *filename;
+    int lineno;
+};
+
+static int store_backtrace(void *ctx_, uintptr_t pc, const char *filename, int lineno, const char *function) {
+    (void)pc;
+    struct backtrace_entry **root = ctx_;
+    if(!function) {
+        function = "<?>";
+    }
+    if(!filename) {
+        filename = "<?>";
+    }
+
+    const size_t size = sizeof(**root) + strlen(function) + 1 + strlen(filename) + 1;
+
+    struct backtrace_entry *const entry = malloc(size);
+    if(!entry) {
+        perror("malloc");
+        return -1;
+    }
+    *entry = (struct backtrace_entry){
+        .next = *root,
+        .lineno = lineno,
+    };
+
+    char *const end = (char *)entry + size;
+    char *p = (char *)entry + sizeof(*entry);
+
+    entry->function = p;
+    p += strlcpy(p, function, end - p);
+    ++p; // NUL-byte
+    assert(p <= end);
+
+    entry->filename = p;
+    p += strlcpy(p, filename, end - p);
+    ++p; // NUL-byte
+    assert(p <= end);
+
+    *root = entry;
+
+    return 0;
+}
+
+void print_backtrace(int skip) {
+    if(!bt_state) {
+        return;
+    }
+    struct backtrace_entry *root = NULL;
+    if(backtrace_full(bt_state, skip + 2, store_backtrace, bt_error, &root) == 0) {
+        for(struct backtrace_entry *e = root; e; e = e->next) {
+            print_log_prefix(e->filename, e->lineno, e->function);
+            fputs("\xE2\x86\xB5\n", stderr);
+        }
+    }
+    while(root) {
+        struct backtrace_entry *next = root->next;
+        free(root);
+        root = next;
+    }
+}
+#endif
+
 #ifndef DEFAULT_LOG_LEVEL
-#define DEFAULT_LOG_LEVEL INT_MAX
+#define DEFAULT_LOG_LEVEL (INT_MAX & ~1)
 #endif
 int log_level = DEFAULT_LOG_LEVEL;
 
 void init_log_level(void) {
     const char *level = getenv("LOG_LEVEL");
-    if(!level) {
-        return;
+    if(level) {
+        int e;
+        log_level = strtol_limit(&e, level, INT_MIN, INT_MAX);
+        if(e) {
+            log_level = DEFAULT_LOG_LEVEL;
+            perror("strtol");
+        }
+        log_level &= ~1;
     }
-    int e;
-    log_level = strtol_limit(&e, level, INT_MIN, INT_MAX);
-    if(e) {
-        perror("strtol");
-        log_level = DEFAULT_LOG_LEVEL;
-    }
+
+#ifdef USE_LIBBACKTRACE
+    bt_state = backtrace_create_state(NULL, 0, &bt_error, NULL);
+#endif
 }
 
 void _log(int level, const char *filename, unsigned int lineno, const char *func, const char *fmt, ...) {
@@ -42,25 +139,23 @@ void _log(int level, const char *filename, unsigned int lineno, const char *func
 
     int errnum = errno;
 
-    static const char indent[] = "                                       ";
-    static const char *indent_end = indent + sizeof(indent) - 1;
-    _Static_assert(sizeof(indent) - 1 >= 39, "indent buffer too small");
-    int n;
+    int unlock = fcntl(STDERR_FILENO, F_SETLKW, &(struct flock){ .l_type = F_WRLCK }) == 0;
 
-    n = fprintf(stderr, "[%d] %s:%d ", (int)getpid(), filename, lineno);
-    if(n >= 0 && (size_t)n < 39) {
-        fputs(indent_end - 39 + n, stderr);
+#ifdef USE_LIBBACKTRACE
+    if(level & LOG_BACKTRACE) {
+        print_backtrace(1);
     }
-
-    n = fprintf(stderr, "%s: ", func);
-    if(n >= 0 && (size_t)n < 22) {
-        fputs(indent_end - 22 + n, stderr);
-    }
+#endif
+    print_log_prefix(filename, lineno, func);
 
     va_list va;
     va_start(va, fmt);
     vfprintf(stderr, fmt, va);
     va_end(va);
+
+    if(unlock) {
+        fcntl(STDERR_FILENO, F_SETLKW, &(struct flock){ .l_type = F_UNLCK });
+    }
 
     errno = errnum;
 }
@@ -376,7 +471,13 @@ eoverflow:
     return NULL;
 }
 
-int list_fds(const char *prefix) {
+int _list_fds(int level, const char *filename, unsigned int lineno, const char *func) {
+    if(level > log_level) {
+        return 0;
+    }
+
+    int unlock = 0;
+
     int rc = -1;
     int dir_fd = -1;
     char *target = NULL;
@@ -397,6 +498,13 @@ int list_fds(const char *prefix) {
     if(!target) {
         goto cleanup;
     }
+
+    unlock = fcntl(STDERR_FILENO, F_SETLKW, &(struct flock){ .l_type = F_WRLCK }) == 0;
+#ifdef USE_LIBBACKTRACE
+    if(level & LOG_BACKTRACE) {
+        print_backtrace(1);
+    }
+#endif
 
     struct dirent *e;
     while((e = readdir(d))) {
@@ -449,16 +557,12 @@ int list_fds(const char *prefix) {
             { .num = FD_CLOEXEC, .str = "FD_CLOEXEC" },
             {0, NULL}
         };
+
+        print_log_prefix(filename, lineno, func);
         char str_flags[512];
-        LOG(
-            LOG_ALWAYS,
-            "%s"
-            "%s"
-            "fd=%d"
-            " fdflags=%s"
-            " -> %s\n",
-            prefix ? prefix : "",
-            prefix ? ": " : "",
+        fprintf(
+            stderr,
+            "fd=%d fdflags=%s -> %s\n",
             fd,
             (flags < 0) ? "-1" : str_bits(bits, str_flags, sizeof(str_flags), flags),
             target
@@ -467,6 +571,9 @@ int list_fds(const char *prefix) {
 
     rc = 0;
 cleanup:
+    if(unlock) {
+        fcntl(STDERR_FILENO, F_SETLKW, &(struct flock){ .l_type = F_UNLCK });
+    }
     ;int errnum = errno;
     free(target);
     if(d) {

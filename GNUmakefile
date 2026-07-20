@@ -9,7 +9,7 @@ WORKER = libexec/crash-tolerant-proxy-worker
 
 # Pre-processor flags
 # Use $(*FLAGS) to replace default flags and $(EXTRA_*FLAGS) to append.
-CPPFLAGS = -D_GNU_SOURCE -DSHARED_MEMORY_RELOCATABLE -DHAVE_SYSTEMD -DUSE_VALGRIND
+CPPFLAGS = -D_GNU_SOURCE -DSHARED_MEMORY_RELOCATABLE -DHAVE_SYSTEMD -DUSE_LIBBACKTRACE -DUSE_VALGRIND
 EXTRA_CPPFLAGS =
 final_cppflags = $(CPPFLAGS) $(EXTRA_CPPFLAGS)
 
@@ -23,7 +23,7 @@ final_cflags = $(CFLAGS) $(EXTRA_CFLAGS) -std=c99 -Werror=vla \
 
 # Linker flags
 # Use $(*FLAGS) to replace default flags and $(EXTRA_*FLAGS) to append.
-LDFLAGS = -Llibcrash/nop -lcrash -Wl,-rpath,'$$ORIGIN/../libcrash/nop'
+LDFLAGS = -lbacktrace -Llibcrash/nop -lcrash -Wl,-rpath,'$$ORIGIN/../libcrash/nop'
 EXTRA_LDFLAGS = #-fsanitize=address,undefined
 final_ldflags = $(LDFLAGS) $(EXTRA_LDFLAGS)
 
@@ -67,7 +67,7 @@ install: bin/listener bin/worker
 
 bin/launcher: obj/launcher.o obj/common/util.o
 	@mkdir -p $(@D)
-	$(CC) -o $@ $^
+	$(CC) -o $@ $^ -lbacktrace
 
 bin/listener: $(LISTENER_OBJS)
 	$(MAKE_LIBCRASH_NOP)

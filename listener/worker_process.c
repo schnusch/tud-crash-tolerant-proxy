@@ -139,7 +139,7 @@ pid_t worker_process_spawn(
             && fd_cloexec(cmdline->shared_mem_fd, 0) == 0
             && (argv = cmdline_to_worker_argv(cmdline, dup_fd, ipc_fd[1]))
         ) {
-            list_fds(__func__);
+            list_fds(LOG_INFO);
             LOG(LOG_INFO, "$");
             for(char **p = argv; *p; ++p) {
                 fprintf(stderr, " %s", *p);

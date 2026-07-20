@@ -454,7 +454,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             // connections will be closed, if `state == CONN_ERROR` the listener
             // will set `SO_LINGER` beforehand.
             // https://ndeepak.com/posts/2016-10-21-tcprst/
-            list_fds(__func__);
+            list_fds(LOG_DEBUG);
             LOG(LOG_INFO, "slot=%zu close(%d)\n", info->slot, conn->upstream.fd[1]);
             if(close(conn->upstream.fd[1]) < 0) {
                 perror("close");
@@ -913,7 +913,7 @@ int main(int argc, char **argv) {
                     switch(siginfo.ssi_signo) {
                     case SIGUSR1:
                     case SIGUSR2:
-                        list_fds(signame(siginfo.ssi_signo));
+                        list_fds(LOG_ALWAYS);
                         break;
                     default:
                         LOG(LOG_ALWAYS, "signal %s is currently ignored", signame(siginfo.ssi_signo));

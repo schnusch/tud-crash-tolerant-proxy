@@ -4,6 +4,7 @@
   callPackage,
   doxygen,
   gtest,
+  libbacktrace,
   pkgconf,
   systemd,
   valgrind,
@@ -29,6 +30,7 @@ stdenv.mkDerivation {
   ];
 
   buildInputs = [
+    libbacktrace
     systemd
   ];
 

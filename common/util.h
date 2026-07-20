@@ -23,10 +23,16 @@ extern int log_level;
 void init_log_level(void);
 
 enum {
-    LOG_ALWAYS = INT_MIN,
-    LOG_ERROR = -1,
+    /** Print a backtrace before the log message. */
+    LOG_BACKTRACE = 1,
+    /**
+     * The least significant bit controls whether a backtrace should be printed.
+     * Therefore the actual log levels are multiples of two.
+     */
+    LOG_ALWAYS = INT_MIN & ~1,
+    LOG_ERROR = -2,
     LOG_INFO = 0,
-    LOG_DEBUG,
+    LOG_DEBUG = 2,
 };
 
 /**
@@ -35,7 +41,11 @@ enum {
 void _log(int level, const char *filename, unsigned int lineno, const char *func, const char *fmt, ...);
 
 #define LOG(LEVEL, ...) _log(LEVEL, __FILE__, __LINE__, __func__, __VA_ARGS__)
-#define perror(s) LOG(LOG_ALWAYS, "%s: %s\n", (s), strerror(errno))
+#define perror(s) LOG(LOG_ALWAYS | LOG_BACKTRACE, "%s: %s\n", (s), strerror(errno))
+
+#ifdef USE_LIBBACKTRACE
+void print_backtrace(int skip);
+#endif
 
 /**
  * Repeat the syscall `CALL` if it returned `< 0` and set errno to `EINTR`. The
@@ -121,10 +131,12 @@ int parse_sockaddr(struct sockaddr_storage *addr, const char *str_addr);
  */
 char *json_strdup(const char *str);
 
+int _list_fds(int level, const char *filename, unsigned int lineno, const char *func);
+
 /**
  * Print the list of open file descriptors of the current process to stderr.
  */
-int list_fds(const char *prefix);
+#define list_fds(LEVEL) _list_fds(LEVEL, __FILE__, __LINE__, __func__)
 
 /**
  * `*array` is an array with `*len` elements of size `size`. Realloc `*array`
