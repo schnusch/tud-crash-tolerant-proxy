@@ -110,6 +110,7 @@ pid_t worker_process_spawn(
     int err_pipe[2] = { -1, -1 };
     pid_t child = -1;
     int pid_fd = -1;
+    sigset_t *restore_sigset = NULL;
 
     if(socketpair(AF_UNIX, SOCK_SEQPACKET, 0, ipc_fd) < 0) {
         perror("socketpair");
@@ -120,6 +121,17 @@ pid_t worker_process_spawn(
         perror("pipe");
         goto error;
     }
+
+    // SIGCHLD must not interfere with the call to waitpid.
+    sigset_t sigchld, oldset;
+    sigemptyset(&sigchld);
+    sigaddset(&sigchld, SIGCHLD);
+    if(sigprocmask(SIG_BLOCK, &sigchld, &oldset) < 0) {
+        perror("sigprocmask");
+        goto error;
+    }
+    restore_sigset = &oldset;
+
     child = fork();
     if(child < 0) {
         perror("fork");
@@ -133,7 +145,8 @@ pid_t worker_process_spawn(
         // Close all other file descriptors.
         char **argv;
         if(
-            close_range(STDERR_FILENO + 1, INT_MAX, CLOSE_RANGE_CLOEXEC) == 0
+            sigprocmask(SIG_SETMASK, restore_sigset, NULL) == 0
+            && close_range(STDERR_FILENO + 1, INT_MAX, CLOSE_RANGE_CLOEXEC) == 0
             && fd_cloexec(dup_fd, 0) == 0
             && fd_cloexec(ipc_fd[1], 0) == 0
             && fd_cloexec(cmdline->shared_mem_fd, 0) == 0
@@ -241,7 +254,12 @@ error:
         }
         child = -1;
     }
-
+    if(restore_sigset) {
+        if(sigprocmask(SIG_SETMASK, restore_sigset, NULL) < 0) {
+            perror("sigprocmask");
+        }
+        restore_sigset = NULL;
+    }
     if(closep(&ipc_fd[1]) < 0 || closep(&err_pipe[0]) < 0 || closep(&err_pipe[1]) < 0) {
         perror("close");
         goto error;
