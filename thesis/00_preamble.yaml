@@ -11,11 +11,7 @@ boxlinks: true
 csquotes: true
 mathspec: true # tudscr does not work with `unicode-math`
 
-# Do not set `lang`, so babel is not loaded.
-lang: ""
-hyperrefoptions:
-- pdflang=en-US
-- pdfpagelayout=TwoPageRight
+lang: en-US
 
 title: A Crash-Tolerant Proxy Service for High-Availability Environments
 
