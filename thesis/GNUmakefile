@@ -58,15 +58,16 @@ PANDOC_CMD = \
 		--embed-resources \
 		--output=$@ \
 		--defaults=defaults.yaml \
+		--bibliography=citations.bib \
 		$(patsubst %,--lua-filter=%,$(FILTERS)) \
 		--include-in-header=$< \
 		- $(SRCS)
 
-tmp/tex/$(NAME).tex: $(TEX_ONLY_SRCS) defaults.yaml $(FILTERS) $(SRCS)
+tmp/tex/$(NAME).tex: $(TEX_ONLY_SRCS) defaults.yaml citations.bib $(FILTERS) $(SRCS)
 	@mkdir -p $(@D)
 	$(PANDOC_CMD)
 
-out/$(NAME)/index.html: $(HTML_ONLY_SRCS) defaults.yaml $(FILTERS) $(SRCS) $(TIKZ_SVGS)
+out/$(NAME)/index.html: $(HTML_ONLY_SRCS) defaults.yaml citations.bib $(FILTERS) $(SRCS) $(TIKZ_SVGS)
 	@mkdir -p $(@D)
 	$(PANDOC_CMD)
 
