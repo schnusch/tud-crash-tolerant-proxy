@@ -160,10 +160,10 @@ TEST_F(Test_atomic_send, crash_prepare_simple1) {
     crash_before_send(this->sockpair, ERROR_PREPARE, 32, 1);
 }
 TEST_F(Test_atomic_send, crash_prepare_wrapped0) {
-    crash_before_send(this->sockpair, ERROR_PREPARE, 8190, 0);
+    crash_before_send(this->sockpair, ERROR_PREPARE, RING_BUFFER_SIZE - 2, 0);
 }
 TEST_F(Test_atomic_send, crash_prepare_wrapped1) {
-    crash_before_send(this->sockpair, ERROR_PREPARE, 8190, 1);
+    crash_before_send(this->sockpair, ERROR_PREPARE, RING_BUFFER_SIZE - 2, 1);
 }
 
 TEST_F(Test_atomic_send, crash_sendmmsg_pre_simple0) {
@@ -173,10 +173,10 @@ TEST_F(Test_atomic_send, crash_sendmmsg_pre_simple1) {
     crash_before_send(this->sockpair, ERROR_SYSCALL_PRE, 0, 1);
 }
 TEST_F(Test_atomic_send, crash_sendmmsg_pre_wrapped0) {
-    crash_before_send(this->sockpair, ERROR_SYSCALL_PRE, 8190, 0);
+    crash_before_send(this->sockpair, ERROR_SYSCALL_PRE, RING_BUFFER_SIZE - 2, 0);
 }
 TEST_F(Test_atomic_send, crash_sendmmsg_pre_wrapped1) {
-    crash_before_send(this->sockpair, ERROR_SYSCALL_PRE, 8190, 1);
+    crash_before_send(this->sockpair, ERROR_SYSCALL_PRE, RING_BUFFER_SIZE - 2, 1);
 }
 
 static void crash_after_send(int sockpair[2], int e, ssize_t start, int active) {
@@ -231,10 +231,10 @@ TEST_F(Test_atomic_send, crash_sendmmsg_post_simple1) {
     crash_after_send(this->sockpair, ERROR_SYSCALL_POST, 0, 1);
 }
 TEST_F(Test_atomic_send, crash_sendmmsg_post_wrapped0) {
-    crash_after_send(this->sockpair, ERROR_SYSCALL_POST, 8190, 0);
+    crash_after_send(this->sockpair, ERROR_SYSCALL_POST, RING_BUFFER_SIZE - 2, 0);
 }
 TEST_F(Test_atomic_send, crash_sendmmsg_post_wrapped1) {
-    crash_after_send(this->sockpair, ERROR_SYSCALL_POST, 8190, 1);
+    crash_after_send(this->sockpair, ERROR_SYSCALL_POST, RING_BUFFER_SIZE - 2, 1);
 }
 
 TEST_F(Test_atomic_send, crash_sendmmsg_memcpy_simple0) {
@@ -244,10 +244,10 @@ TEST_F(Test_atomic_send, crash_sendmmsg_memcpy_simple1) {
     crash_after_send(this->sockpair, ERROR_MEMCPY, 0, 1);
 }
 TEST_F(Test_atomic_send, crash_sendmmsg_memcpy_wrapped0) {
-    crash_after_send(this->sockpair, ERROR_MEMCPY, 8190, 0);
+    crash_after_send(this->sockpair, ERROR_MEMCPY, RING_BUFFER_SIZE - 2, 0);
 }
 TEST_F(Test_atomic_send, crash_sendmmsg_memcpy_wrapped1) {
-    crash_after_send(this->sockpair, ERROR_MEMCPY, 8190, 1);
+    crash_after_send(this->sockpair, ERROR_MEMCPY, RING_BUFFER_SIZE - 2, 1);
 }
 
 TEST_F(Test_atomic_send, fail_sendmmsg) {
@@ -396,10 +396,10 @@ TEST_F(Test_atomic_recv, crash_prepare_wrapping1) {
     crash_before_recv(this->sockpair, ERROR_PREPARE, -4, 1);
 }
 TEST_F(Test_atomic_recv, crash_prepare_inbetween0) {
-    crash_before_recv(this->sockpair, ERROR_PREPARE, 8190, 0);
+    crash_before_recv(this->sockpair, ERROR_PREPARE, RING_BUFFER_SIZE - 2, 0);
 }
 TEST_F(Test_atomic_recv, crash_prepare_inbetween1) {
-    crash_before_recv(this->sockpair, ERROR_PREPARE, 8190, 1);
+    crash_before_recv(this->sockpair, ERROR_PREPARE, RING_BUFFER_SIZE - 2, 1);
 }
 
 TEST_F(Test_atomic_recv, crash_recvmmsg_pre_after0) {
@@ -415,10 +415,10 @@ TEST_F(Test_atomic_recv, crash_recvmmsg_pre_wrapping1) {
     crash_before_recv(this->sockpair, ERROR_SYSCALL_PRE, -4, 1);
 }
 TEST_F(Test_atomic_recv, crash_recvmmsg_pre_inbetween0) {
-    crash_before_recv(this->sockpair, ERROR_SYSCALL_PRE, 8190, 0);
+    crash_before_recv(this->sockpair, ERROR_SYSCALL_PRE, RING_BUFFER_SIZE - 2, 0);
 }
 TEST_F(Test_atomic_recv, crash_recvmmsg_pre_inbetween1) {
-    crash_before_recv(this->sockpair, ERROR_SYSCALL_PRE, 8190, 1);
+    crash_before_recv(this->sockpair, ERROR_SYSCALL_PRE, RING_BUFFER_SIZE - 2, 1);
 }
 
 static void crash_after_recv(int sockpair[2], int e, ssize_t start, int active) {
@@ -502,10 +502,10 @@ TEST_F(Test_atomic_recv, crash_recvmmsg_post_wrapping1) {
     crash_after_recv(this->sockpair, ERROR_SYSCALL_POST, -4, 1);
 }
 TEST_F(Test_atomic_recv, crash_recvmmsg_post_inbetween0) {
-    crash_after_recv(this->sockpair, ERROR_SYSCALL_POST, 8190, 0);
+    crash_after_recv(this->sockpair, ERROR_SYSCALL_POST, RING_BUFFER_SIZE - 2, 0);
 }
 TEST_F(Test_atomic_recv, crash_recvmmsg_post_inbetween1) {
-    crash_after_recv(this->sockpair, ERROR_SYSCALL_POST, 8190, 1);
+    crash_after_recv(this->sockpair, ERROR_SYSCALL_POST, RING_BUFFER_SIZE - 2, 1);
 }
 
 TEST_F(Test_atomic_recv, crash_recvmmsg_memcpy_after0) {
@@ -521,10 +521,10 @@ TEST_F(Test_atomic_recv, crash_recvmmsg_memcpy_wrapping1) {
     crash_after_recv(this->sockpair, ERROR_MEMCPY, -4, 1);
 }
 TEST_F(Test_atomic_recv, crash_recvmmsg_memcpy_inbetween0) {
-    crash_after_recv(this->sockpair, ERROR_MEMCPY, 8190, 0);
+    crash_after_recv(this->sockpair, ERROR_MEMCPY, RING_BUFFER_SIZE - 2, 0);
 }
 TEST_F(Test_atomic_recv, crash_recvmmsg_memcpy_inbetween1) {
-    crash_after_recv(this->sockpair, ERROR_MEMCPY, 8190, 1);
+    crash_after_recv(this->sockpair, ERROR_MEMCPY, RING_BUFFER_SIZE - 2, 1);
 }
 
 class Test_atomic_recv_rst : public Test_atomic_recv {

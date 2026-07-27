@@ -297,7 +297,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             );
             LOG(
                 LOG_DEBUG,
-                "slot=%zu            %10s.tx.len = %4zu => %4zu\n",
+                "slot=%zu            %10s.tx.len = %6zu => %6zu\n",
                 info->slot,
                 endpoint == &conn->downstream ? "downstream" : "upstream",
                 old_len,
@@ -344,7 +344,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             );
             LOG(
                 LOG_DEBUG,
-                "slot=%zu            %10s.rx.len = %4zu => %4zu\n",
+                "slot=%zu            %10s.rx.len = %6zu => %6zu\n",
                 info->slot,
                 endpoint == &conn->downstream ? "downstream" : "upstream",
                 old_len,
@@ -403,7 +403,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
 #define LOG_LEN(prefix, UP_DOWN, RX_TX) \
     LOG( \
         LOG_DEBUG, \
-        "slot=%zu %s %13s.len = %4zu => %4zu\n", \
+        "slot=%zu %s %13s.len = %6zu => %6zu\n", \
         info->slot, \
         prefix, \
         #UP_DOWN "." #RX_TX, \
