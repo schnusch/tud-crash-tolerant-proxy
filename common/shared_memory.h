@@ -34,6 +34,15 @@ enum {
 _Static_assert(CONN_ERROR <= CONN_STATE_BITS, "connection state does not fit in the lower bits");
 
 /**
+ * Convert string representation of `connection::state`.
+ * \param buf   buffer to write string representation to
+ * \param size  size of `buf`
+ * \param state `connection::state`
+ * \return `buf`
+ */
+char *str_state(char *buf, size_t size, int state);
+
+/**
  * File descriptors will differ in the two processes. `fd_pair_t[0]` refers to
  * the listener's file descriptor, `fd_pair_t[1]` to the worker's.
  */
