@@ -221,33 +221,36 @@ error:
 
 #ifdef CMDLINE_LISTENER
 static int parse_worker_process_arg(struct cmdline_opts *cmdline, const char *arg) {
+    char *delim_ptr[2];
+    delim_ptr[0] = strchr(arg, ',');
+    if(!delim_ptr[0]) {
+        errno = EINVAL;
+        return -1;
+    }
+    delim_ptr[1] = strchr(delim_ptr[0] + 1, ',');
+    if(!delim_ptr[1]) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    int ipc_fd = -1;
+    int pid_fd = -1;
+    pid_t pid = -1;
+
     int e;
+    char delim_backup[2];
+    delim_backup[0] = *delim_ptr[0], *delim_ptr[0] = '\0';
+    delim_backup[1] = *delim_ptr[1], *delim_ptr[1] = '\0';
+    ipc_fd = strtol_limit(&e, optarg, 0, INT_MAX);
+    if(!e) {
+        pid_fd = strtol_limit(&e, delim_ptr[0] + 1, 0, INT_MAX);
+    }
+    if(!e) {
+        pid = strtol_limit(&e, delim_ptr[1] + 1, 0, INT_MAX);
+    }
+    *delim_ptr[0] = delim_backup[0];
+    *delim_ptr[1] = delim_backup[1];
 
-    const char *colon = strchr(arg, ':');
-    if(!colon) {
-        errno = EINVAL;
-        return -1;
-    }
-    const char *str_ipc_fd = strndupa(arg, colon - arg);
-    int ipc_fd = strtol_limit(&e, str_ipc_fd, 0, INT_MAX);
-    if(e) {
-        return -1;
-    }
-
-    arg = colon + 1;
-    const char *comma = strchr(arg, ',');
-    if(!comma) {
-        errno = EINVAL;
-        return -1;
-    }
-    const char *str_pid = strndupa(arg, comma - arg);
-    pid_t pid = strtol_limit(&e, str_pid, 0, INT_MAX);
-    if(e) {
-        return -1;
-    }
-
-    arg = comma + 1;
-    int pid_fd = strtol_limit(&e, arg, 0, INT_MAX);
     if(e) {
         return -1;
     }
@@ -597,7 +600,10 @@ char **cmdline_to_listener_argv(struct cmdline_opts *cmdline) {
     for(size_t i = 0, n = worker_process_array_len(&cmdline->worker_procs); i < n; ++i) {
         struct worker_process *proc = worker_process_array_get(&cmdline->worker_procs, i);
         assert(proc);
-        if(argv_append(&argv, "--worker-process=%d:%d,%d", proc->ipc_fd, (int)proc->pid, proc->pid_fd) < 0) {
+        if(proc->ipc_fd < 0 || proc->pid_fd < 0 || proc->pid < 0) {
+            continue;
+        }
+        if(argv_append(&argv, "--worker-process=%d,%d,%d", proc->ipc_fd, proc->pid_fd, (int)proc->pid) < 0) {
             goto error;
         }
     }
