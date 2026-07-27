@@ -282,12 +282,16 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
 #endif
         // Send as much data as possible.
         if(events & (EPOLLOUT | EPOLLERR | EPOLLHUP)) {
-            int rc;
+            int rc = 0;
             size_t old_len = ACTIVE_RANGE(&endpoint->tx)->len;
-            do {
+            while(ACTIVE_RANGE(&endpoint->tx)->len > 0) {
                 rc = atomic_send(endpoint->fd[1], &endpoint->tx);
                 LOG(LOG_DEBUG, "atomic_send(%d, ...) = %d\n", endpoint->fd[1], rc);
-            } while(rc > 0 || (rc < 0 && errno == EINTR));
+                if(rc < 0 && errno != EINTR) {
+                    break;
+                }
+                assert(rc > 0);
+            }
             LOG(
                 LOG_DEBUG,
                 "slot=%zu send:      %10s.fd[1] = %d\n",
@@ -331,10 +335,14 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
         ) {
             int rc;
             size_t old_len = ACTIVE_RANGE(&endpoint->rx)->len;
+            assert(ACTIVE_RANGE(&endpoint->rx)->len < sizeof(endpoint->rx.buf));
             do {
                 rc = atomic_recv(endpoint->fd[1], &endpoint->rx);
                 LOG(LOG_DEBUG, "atomic_recv(%d, ...) = %d\n", endpoint->fd[1], rc);
-            } while(rc > 0 || (rc < 0 && errno == EINTR));
+                if(rc == 0 || (rc < 0 && errno != EINTR)) {
+                    break;
+                }
+            } while(ACTIVE_RANGE(&endpoint->rx)->len < sizeof(endpoint->rx.buf));
             LOG(
                 LOG_DEBUG,
                 "slot=%zu recv:      %10s.fd[1] = %d\n",
