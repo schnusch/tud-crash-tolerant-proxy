@@ -42,7 +42,7 @@ struct ring_buffer_range {
 /**
  * Number of bytes in `atomic_ring_buffer::buf`.
  */
-#define RING_BUFFER_SIZE 8192
+#define RING_BUFFER_SIZE (128 * 1024)
 
 /**
  * Ring buffer that can appended to and trimmed atomically. Each buffer has two
