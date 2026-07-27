@@ -83,29 +83,6 @@ size_t pwritev_all(int fd, const struct iovec *iov, size_t iovcnt, off_t offset)
 int fd_cloexec(int fd, int set);
 
 /**
- * Receive into `buf` and a single file descriptor into `*fd` from `sock`. If
- * no file descriptor is received `-1` is returned in `*fd`.
- */
-ssize_t recv_fd(int sock, void *buf, size_t size, int *fd, int flags);
-
-/**
- * Send `buf` and a single file descriptor `fd` over `sock`.
- */
-ssize_t send_fd(int sock, const void *buf, size_t size, int fd, int flags);
-
-/**
- * A single call to `recv_fd` followed by `readall`.
- * Same semantics as `readall` apply.
- */
-ssize_t recvall_fd(int sock, void *buf, size_t *size, int *fd);
-
-/**
- * A single call to `send_fd` followed by `writeall`.
- * Same semantics as `writeall` apply.
- */
-ssize_t sendall_fd(int sock, const void *buf, size_t *size, int fd);
-
-/**
  * see [strlcpy(3)](https://man.openbsd.org/strlcpy.3)
  */
 size_t strlcpy(char *dst, const char *src, size_t size);
