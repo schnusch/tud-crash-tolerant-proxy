@@ -222,6 +222,7 @@ static int swap_buffers(struct context *ctx, struct connection *conn) {
     conn->downstream.tx.active = !!(conn->state & (1 <<  9));
     conn->upstream.rx.active   = !!(conn->state & (1 << 10));
     conn->upstream.tx.active   = !!(conn->state & (1 << 11));
+    conn->transform_ctx.active = !!(conn->state & (1 << 12));
     if(
         epoll_from_buffers(ctx, &conn->downstream) < 0
         || epoll_from_buffers(ctx, &conn->upstream) < 0
@@ -407,7 +408,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
         SAVE_LOG_LEN(upstream, tx);
 #undef SAVE_LOG_LEN
         // Transform from recv buffers to send buffers.
-        int rc = transform(&conn->transform_ctx, &down, &up);
+        int rc = transform(info->slot, &conn->transform_ctx, &down, &up);
 #define LOG_LEN(prefix, UP_DOWN, RX_TX) \
     LOG( \
         LOG_DEBUG, \
@@ -503,6 +504,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             | (!conn->downstream.tx.active <<  9)
             | (!conn->upstream.rx.active   << 10)
             | (!conn->upstream.tx.active   << 11)
+            | (!conn->transform_ctx.active << 12)
         );
         __attribute__((fallthrough));
     case CONN_SWAP_BUFFERS:

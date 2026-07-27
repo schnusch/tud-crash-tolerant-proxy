@@ -5,6 +5,7 @@
 #define _Static_assert(cond, msg) static_assert(cond, msg)
 #endif
 
+#include <assert.h>
 #include <arpa/inet.h>
 #include <limits.h>
 #include <stddef.h>
@@ -40,7 +41,11 @@ enum {
  */
 void _log(int level, const char *filename, unsigned int lineno, const char *func, const char *fmt, ...);
 
-#define LOG(LEVEL, ...) _log(LEVEL, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define LOG(LEVEL, ...) ( \
+    ((LEVEL) & ~LOG_BACKTRACE) > log_level \
+    ? (void)0 \
+    : _log(LEVEL, __FILE__, __LINE__, __func__, __VA_ARGS__) \
+)
 #define perror(s) LOG(LOG_ALWAYS | LOG_BACKTRACE, "%s: %s\n", (s), strerror(errno))
 
 #ifdef USE_LIBBACKTRACE
@@ -127,9 +132,31 @@ char *format_sockaddr(char *buf, const struct sockaddr *addr);
 int parse_sockaddr(struct sockaddr_storage *addr, const char *str_addr);
 
 /**
+ * Calculate the size of a buffer needed to store a JSON representation
+ * of `str`.
+ */
+size_t json_bufsize(const char *str, size_t len);
+
+/**
+ * Copy a JSON representation of `src` to `dst`.
+ */
+size_t json_strlcpy(char *json, size_t json_size, const char *src, size_t len);
+
+/**
  * Allocate memory and write JSON representation of `str` to it.
  */
 char *json_strdup(const char *str);
+
+/**
+ * Allocate memory on the stack and write JSON representation of `str` to it.
+ */
+#define json_strndupa(src, len) _json_strndupa(alloca(json_bufsize(src, len)), src, len)
+static inline char *_json_strndupa(char *dst, const char *src, size_t len) {
+    size_t size = json_bufsize(src, len);
+    size_t n = json_strlcpy(dst, size, src, len);
+    assert(n < size);
+    return dst;
+}
 
 int _list_fds(int level, const char *filename, unsigned int lineno, const char *func);
 

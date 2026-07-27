@@ -133,10 +133,6 @@ void init_log_level(void) {
 }
 
 void _log(int level, const char *filename, unsigned int lineno, const char *func, const char *fmt, ...) {
-    if(level > log_level) {
-        return;
-    }
-
     int errnum = errno;
 
     int unlock = fcntl(STDERR_FILENO, F_SETLKW, &(struct flock){ .l_type = F_WRLCK }) == 0;
@@ -416,29 +412,43 @@ int parse_sockaddr(struct sockaddr_storage *addr, const char *str_addr) {
     return 0;
 }
 
-char *json_strdup(const char *str) {
-    // Calculate length.
-    size_t json_size = 3; // two quotes and the NUL byte
-    for(const char *src = str; *src; ++src) {
-        if(*src < ' ' || *src == '"' || *src == '\\' || '~' < *src) {
-            json_size += 6; // \u00XX
-        } else {
-            ++json_size;
+static const char json_chars[256] = {
+    0, 0, 0,   0, 0, 0, 0, 0, 'b', 't', 'n', 0, 'f',  'r', 0, 0,
+    0, 0, 0,   0, 0, 0, 0, 0, 0,   0,   0,   0, 0,    0,   0, 0,
+    1, 1, '"', 1, 1, 1, 1, 1, 1,   1,   1,   1, 1,    1,   1, 1,
+    1, 1, 1,   1, 1, 1, 1, 1, 1,   1,   1,   1, 1,    1,   1, 1,
+    1, 1, 1,   1, 1, 1, 1, 1, 1,   1,   1,   1, 1,    1,   1, 1,
+    1, 1, 1,   1, 1, 1, 1, 1, 1,   1,   1,   1, '\\', 1,   1, 1,
+    1, 1, 1,   1, 1, 1, 1, 1, 1,   1,   1,   1, 1,    1,   1, 1,
+    1, 1, 1,   1, 1, 1, 1, 1, 1,   1,   1,   1, 1,    1,   1
+};
+
+size_t json_bufsize(const char *str, size_t len) {
+    size_t n = 3;
+    for(size_t i = 0; i < len; ++i) {
+        switch(json_chars[(unsigned char)str[i]]) {
+        case 0:
+            n += 6;
+            break;
+        case 1:
+            n += 1;
+            break;
+        default:
+            n += 2;
+            break;
         }
     }
+    return n;
+}
 
-    char *json = malloc(json_size);
-    if(!json) {
-        return NULL;
-    }
-
-    // Escape string.
+size_t json_strlcpy(char *json, size_t json_size, const char *src, size_t len) {
     char *dst = json;
     *dst++ = '"';
-    for(const char *src = str; *src; ++src) {
-        if(*src < ' ' || *src == '"' || *src == '\\' || '~' < *src) {
+    for(; len > 0; --len, ++src) {
+        char esc = json_chars[(unsigned char)*src];
+        if(esc == 0) {
             if(dst + 6 > json + json_size) {
-                goto eoverflow;
+                goto overflow;
             }
             static const char hex_digits[] = {
                 '0', '1', '2', '3', '4', '5', '6', '7',
@@ -450,25 +460,48 @@ char *json_strdup(const char *str) {
             *dst++ = '0';
             *dst++ = hex_digits[(*src >> 4) & 0x0F];
             *dst++ = hex_digits[*src & 0x0F];
-        } else {
+        } else if(esc == 1) {
             if(dst + 1 > json + json_size) {
-                goto eoverflow;
+                goto overflow;
             }
             *dst++ = *src;
+        } else {
+            if(dst + 2 > json + json_size) {
+                goto overflow;
+            }
+            *dst++ = '\\';
+            *dst++ = esc;
         }
     }
     if(dst + 2 > json + json_size) {
-        goto eoverflow;
+        goto overflow;
     }
     *dst++ = '"';
-    *dst++ = '\0';
+    *dst = '\0';
 
+    return dst - json;
+
+overflow:
+    if(json_size > 0) {
+        json[json_size - 1] = '\0';
+    }
+    // Subtract NUL-byte a doubled leading quote (").
+    return dst - json + json_bufsize(src, len) - 2;
+}
+
+char *json_strdup(const char *str) {
+    size_t len = strlen(str);
+    size_t json_size = json_bufsize(str, len);
+    char *json = malloc(json_size);
+    if(!json) {
+        return NULL;
+    }
+    if(json_strlcpy(json, json_size, str, len) >= json_size) {
+        free(json);
+        errno = EOVERFLOW;
+        return NULL;
+    }
     return json;
-
-eoverflow:
-    free(json);
-    errno = EOVERFLOW;
-    return NULL;
 }
 
 int _list_fds(int level, const char *filename, unsigned int lineno, const char *func) {
