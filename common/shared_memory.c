@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <errno.h>
+#include <stdio.h> // snprintf
 #include <stdlib.h> // alloca
 #include <sys/mman.h> // memfd_create, mmap
 #include <sys/stat.h>
@@ -7,6 +8,51 @@
 
 #include "shared_memory.h"
 #include "util.h"
+
+char *str_state(char *buf, size_t size, int state) {
+    char *const end = buf + size;
+    char *p = buf;
+    const char *src;
+    switch(state & CONN_STATE_BITS) {
+#define CASE(x) case x: src = #x; break;
+        CASE(CONN_UNUSED)
+        CASE(CONN_ACCEPTING)
+        CASE(CONN_CONNECTING)
+        CASE(CONN_POLL)
+        CASE(CONN_SWAP_BUFFERS)
+        CASE(CONN_CLOSING)
+        CASE(CONN_ERROR)
+#undef CASE
+    default:
+        goto more;
+    }
+    p += strlcpy(p, src, end - p);
+    if(p >= end) {
+trunc:
+        if(size >= 4) {
+            p = end - 4;
+        } else {
+            p = buf;
+        }
+        strlcpy(p, "...", end - p);
+        return buf;
+    }
+    if((state & ~CONN_STATE_BITS) == 0) {
+        return buf;
+    }
+    state &= ~CONN_SWAP_BUFFERS;
+    p += strlcpy(p, " | ", end - p);
+    if(p >= end) {
+        goto trunc;
+    }
+more:
+    ;
+    int n = snprintf(p, end - p, "0x%03X", state);
+    if(n < 0 || end - p <= n) {
+        goto trunc;
+    }
+    return buf;
+}
 
 int shared_memory_open(struct shared_memory_mapping *map, int fd, struct shared_memory *hint) {
 #ifndef SHARED_MEMORY_RELOCATABLE

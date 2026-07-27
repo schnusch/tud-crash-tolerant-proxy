@@ -17,58 +17,6 @@
 #include "../common/util.h"
 
 /**
- * Convert string representation of `connection::state`.
- * \param buf   buffer to write string representation to
- * \param size  size of `buf`
- * \param state `connection::state`
- * \return `buf`
- */
-static char *str_state(char *buf, size_t size, int state) {
-    char *const end = buf + size;
-    char *p = buf;
-    const char *src;
-    switch(state & CONN_STATE_BITS) {
-#define CASE(x) case x: src = #x; break;
-        CASE(CONN_UNUSED)
-        CASE(CONN_ACCEPTING)
-        CASE(CONN_CONNECTING)
-        CASE(CONN_POLL)
-        CASE(CONN_SWAP_BUFFERS)
-        CASE(CONN_CLOSING)
-        CASE(CONN_ERROR)
-#undef CASE
-    default:
-        goto more;
-    }
-    p += strlcpy(p, src, end - p);
-    if(p >= end) {
-trunc:
-        if(size >= 4) {
-            p = end - 4;
-        } else {
-            p = buf;
-        }
-        strlcpy(p, "...", end - p);
-        return buf;
-    }
-    if((state & ~CONN_STATE_BITS) == 0) {
-        return buf;
-    }
-    state &= ~CONN_SWAP_BUFFERS;
-    p += strlcpy(p, " | ", end - p);
-    if(p >= end) {
-        goto trunc;
-    }
-more:
-    ;
-    int n = snprintf(p, end - p, "0x%03X", state);
-    if(n < 0 || end - p <= n) {
-        goto trunc;
-    }
-    return buf;
-}
-
-/**
  * Change `*state` and log the change.
  * \param slot      only used for logging
  * \param state     pointer to `connection::state`
