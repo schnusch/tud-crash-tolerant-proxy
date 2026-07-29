@@ -51,10 +51,9 @@ struct connection *accept_connection(struct shared_memory_mapping *map, int list
     assert(conn->downstream.addrlen <= sizeof(conn->downstream.addr));
 
     // Save file descriptor.
-    conn->downstream.fd[0] = conn_fd;
-    conn->downstream.fd[1] = -1;
-    conn->upstream.fd[0] = -1;
-    conn->upstream.fd[1] = -1;
+    // Don't forget to reset `*.shutdown`.
+    conn->downstream = (struct connection_endpoint){ .fd = { conn_fd, -1 } };
+    conn->upstream   = (struct connection_endpoint){ .fd = { -1, -1 } };
     conn->worker_pid = -1;
 
     return conn;
