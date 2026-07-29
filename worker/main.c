@@ -411,16 +411,17 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             // connections will be closed, if `state == CONN_ERROR` the listener
             // will set `SO_LINGER` beforehand.
             // https://ndeepak.com/posts/2016-10-21-tcprst/
+            // The listener will set the connection to CONN_UNUSED.
             list_fds(LOG_DEBUG);
-            LOG(LOG_INFO, "slot=%zu close(%d)\n", info->slot, conn->upstream.fd[1]);
-            if(close(conn->upstream.fd[1]) < 0) {
-                perror("close");
-                r = -1;
-            }
-            LOG(LOG_INFO, "slot=%zu close(%d)\n", info->slot, conn->downstream.fd[1]);
-            if(close(conn->downstream.fd[1]) < 0) {
-                perror("close");
-                r = -1;
+            FOREACH_CONNECTION_ENDPOINT(endpoint, conn) {
+                LOG(LOG_INFO, "slot=%zu close(%d)\n", info->slot, endpoint->fd[1]);
+                if(closep(&endpoint->fd[1]) < 0) {
+                    if(errno == EBADF) {
+                        endpoint->fd[1] = -1;
+                    }
+                    perror("close");
+                    r = -1;
+                }
             }
 #ifdef PERFORMANCE_BASELINE
             // Do not exit on connection error.
@@ -657,9 +658,38 @@ static int ipc_accepted(const char *action, size_t slot, int fd, const char *tai
     return 0;
 }
 
+static int ipc_close(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
+    (void)action, (void)tail;
+    struct context *ctx = ctx_;
+
+    int rc = 0;
+    if(fd >= 0) {
+        LOG(LOG_ERROR, "IPC close should not received a file descriptor fd=%d\n", fd);
+        if(closep(&fd) < 0) {
+            perror("close");
+        }
+        rc = -2;
+    }
+
+    struct connection *conn = shared_memory_get_connection(&ctx->map, slot);
+    assert(conn);
+    FOREACH_CONNECTION_ENDPOINT(endpoint, conn) {
+        if(closep(&endpoint->fd[1]) < 0) {
+            if(errno == EBADF) {
+                endpoint->fd[1] = -1;
+            } else {
+                perror("close");
+            }
+        }
+    }
+    atomic_store_explicit(&conn->state, CONN_UNUSED, memory_order_release);
+    return rc;
+}
+
 static const struct ipc_action_method ipc_methods[] = {
     {"accepted", ipc_accepted},
     {"connected", ipc_connected},
+    {"close", ipc_close},
     {NULL, NULL},
 };
 

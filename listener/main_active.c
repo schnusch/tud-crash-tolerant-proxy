@@ -20,6 +20,36 @@
 #include "../common/util.h"
 
 /**
+ * Set `SO_LINGER` on both file descriptors.
+ */
+static void set_linger(struct connection *conn) {
+    static const struct linger l = {
+        .l_onoff = 1,
+        .l_linger = 0,
+    };
+    FOREACH_CONNECTION_ENDPOINT(endpoint, conn) {
+        if(setsockopt(endpoint->fd[0], SOL_SOCKET, SO_LINGER, &l, sizeof(l)) < 0) {
+            perror("setsockopt(SOL_SOCKET, SO_LINGER)");
+        }
+    }
+}
+
+/**
+ * Close both file descriptors.
+ */
+static void close_connection(struct connection *conn) {
+    FOREACH_CONNECTION_ENDPOINT(endpoint, conn) {
+        if(closep(&endpoint->fd[0]) < 0) {
+            if(errno == EBADF) {
+                endpoint->fd[0] = -1;
+            } else {
+                perror("close");
+            }
+        }
+    }
+}
+
+/**
  * Close connections with `CONN_CLOSING` and add all other file descriptors to
  * `fd_info`.
  */
@@ -279,30 +309,38 @@ static int ipc_connect(const char *action, size_t slot, int fd, const char *tail
     return 0;
 
 error:
-    // TODO CONN_ERROR
-    if(ipc_send(ctx->ipc_fd, "error", slot, -1, NULL) < 0) {
+    set_linger(conn);
+    // Close this proceses file descriptors first, then notify the worker. The
+    // worker will set the connection to CONN_UNUSED.
+    close_connection(conn);
+    if(ipc_send(ctx->ipc_fd, "close", slot, -1, NULL) < 0) {
         perror("ipc_send");
         return -2;
     }
     return 0;
 }
 
+/**
+ * Handle `close ...` IPC messages.
+ */
 static int ipc_close(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
     (void)action, (void)tail;
     struct ipc_context *ctx = ctx_;
     struct connection *conn = shared_memory_get_connection(ctx->map, slot);
     assert(conn);
 
-    int e = 0;
-    // TODO EBADF
-    e = closep(&conn->downstream.fd[0]) < 0 || e;
-    e = closep(&conn->upstream.fd[0])   < 0 || e;
-    if(e) {
-        perror("close");
-        return -2;
-    }
+    int state = atomic_load_explicit(&conn->state, memory_order_acquire);
 
-    return 0;
+    if(state == CONN_ERROR) {
+        set_linger(conn);
+    } else {
+        assert(state == CONN_CLOSING);
+    }
+    close_connection(conn);
+
+    atomic_store_explicit(&conn->state, CONN_UNUSED, memory_order_release);
+
+    return rc;
 }
 
 static const struct ipc_action_method ipc_methods[] = {
