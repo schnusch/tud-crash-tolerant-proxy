@@ -686,10 +686,103 @@ static int ipc_close(const char *action, size_t slot, int fd, const char *tail, 
     return rc;
 }
 
+/**
+ * Receive an already accepted file descriptor.
+ */
+static int ipc_orphan_downstream(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
+    (void)action, (void)tail;
+    struct context *ctx = ctx_;
+    struct connection *conn = shared_memory_get_or_append_connection(&ctx->map, slot);
+    assert(conn);
+
+    if(fd < 0) {
+        errno = EBADF;
+        // Cause the worker to exit. It will be restarted by the listener and
+        // passing the file descriptor will be retried. Another option would be
+        // to set the connection to CONN_ERROR and drop the connection.
+        LOG(
+            LOG_ERROR,
+            "no file descriptor received: %s slot=%zu%s%s\n",
+            action,
+            slot,
+            tail ? " " : "",
+            tail ? tail : ""
+        );
+        return -2;
+    }
+    if(fd_cloexec(fd, 0) < 0) {
+        perror("fcntl(F_SETFD)");
+    }
+
+    conn->worker_pid = getpid();
+    conn->downstream.fd[1] = fd;
+    if(ipc_send(ctx->ipc_fd, "orphan_up", slot, -1, NULL) < 0) {
+        perror("ipc_send");
+        return -2;
+    }
+    return 0;
+}
+
+/**
+ * Receive an already connected file descriptor.
+ */
+static int ipc_orphan_upstream(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
+    (void)action, (void)tail;
+    struct context *ctx = ctx_;
+    struct connection *conn = shared_memory_get_or_append_connection(&ctx->map, slot);
+    assert(conn);
+
+    if(fd < 0) {
+        errno = EBADF;
+        // Cause the worker to exit. It will be restarted by the listener and
+        // passing the file descriptor will be retried. Another option would be
+        // to set the connection to CONN_ERROR and drop the connection.
+        LOG(
+            LOG_ERROR,
+            "no file descriptor received: %s slot=%zu%s%s\n",
+            action,
+            slot,
+            tail ? " " : "",
+            tail ? tail : ""
+        );
+        return -2;
+    }
+    if(fd_cloexec(fd, 0) < 0) {
+        perror("fcntl(F_SETFD)");
+    }
+
+    conn->worker_pid = getpid();
+    conn->upstream.fd[1] = fd;
+
+    LOG(LOG_ERROR, "slot=%zu orphaned connection received\n", slot);
+    list_fds(LOG_ERROR);
+
+    // Register orphaned connection with epoll.
+    FOREACH_CONNECTION_ENDPOINT(endpoint, conn) {
+        struct fd_info *info = fd_info_get(&ctx->fd_info, &ctx->num_fds, endpoint->fd[1]);
+        if(!info) {
+            perror("realloc");
+            return -2;
+        }
+        *info = (struct fd_info){
+            .type = FD_TYPE_CONN,
+            .slot = slot,
+            .events = 0,
+        };
+        if(epoll_from_buffers(ctx, endpoint) < 0) {
+            return -2;
+        }
+    }
+
+    return 0;
+}
+
 static const struct ipc_action_method ipc_methods[] = {
     {"accepted", ipc_accepted},
     {"connected", ipc_connected},
     {"close", ipc_close},
+    {"orphan_down", ipc_orphan_downstream},
+    {"orphan_up", ipc_orphan_upstream},
     {NULL, NULL},
 };
 

@@ -60,68 +60,47 @@ static int cleanup_connections(
     const struct worker_process *procs,
     size_t num_procs
 ) {
-    for(
-        struct connection *conn = map->addr->connections;
-        (size_t)((char *)(conn + 1) - (char *)map->addr) <= map->length;
-        ++conn
-    ) {
+    // TODO Sort non-empty connecions to the front, so the size of the shared
+    // memory can be reduced. Must synchronize with workers.
+    size_t truncate_to = 0;
+    FOREACH_CONNECTION(conn, map) {
+        size_t slot = conn - map->addr->connections;
         const int state = atomic_load_explicit(&conn->state, memory_order_acquire);
-        int new_state = state;
-        for(
-            struct connection_endpoint **endpoint = (struct connection_endpoint *[]){
-                &conn->downstream,
-                &conn->upstream,
-                NULL
-            };
-            *endpoint;
-            ++endpoint
-        ) {
-            if((*endpoint)->fd[0] < 0) {
-                continue;
-            }
-            // Query whether the file descriptor is still open.
-            int fd_flags = fcntl((*endpoint)->fd[0], F_GETFD);
-            if(fd_flags < 0) {
-                if(errno == EBADF) {
-                    (*endpoint)->fd[0] = -1;
-                } else {
-                    perror("fcntl(F_GETFD)");
-                    return -1;
+        switch(state & CONN_STATE_BITS) {
+        case CONN_ERROR:
+            // Set SO_LINGER to send TCP RST instead of FIN.
+            set_linger(conn);
+            __attribute__((fallthrough));
+        case CONN_CLOSING:
+            // Close file descriptors.
+            close_connection(conn);
+            char str[512];
+            LOG(LOG_INFO, "slot=%zu cleaned up due to state=%s\n", slot, str_state(str, sizeof(str), state));
+            atomic_store_explicit(&conn->state, CONN_UNUSED, memory_order_release);
+            break;
+        default:
+            // Remember the file descriptor.
+            FOREACH_CONNECTION_ENDPOINT(endpoint, conn) {
+                if(endpoint->fd[0] < 0) {
+                    continue;
                 }
-            }
-
-            switch(state & CONN_STATE_BITS) {
-            case CONN_ERROR:
-                ; // TODO linger
-                __attribute__((fallthrough));
-            case CONN_CLOSING:
-                // Close file descriptors of the connection.
-                if(closep(&(*endpoint)->fd[0]) < 0 && errno == EBADF) {
-                    (*endpoint)->fd[0] = -1;
-                }
-                new_state = CONN_UNUSED;
-                break;
-            default:
-                // Remember the file descriptor.
-                ;
-                struct fd_info *info = fd_info_get(fd_info, num_fds, (*endpoint)->fd[0]);
+                struct fd_info *info = fd_info_get(fd_info, num_fds, endpoint->fd[0]);
                 if(!info) {
                     perror("realloc");
                     return -1;
                 }
                 *info = (struct fd_info){
                     .type = FD_TYPE_CONN,
-                    .slot = conn - map->addr->connections,
+                    .slot = slot,
                 };
-                break;
             }
-        }
-        // Changed state of closed connection.
-        if(new_state != state) {
-            atomic_store_explicit(&conn->state, new_state, memory_order_release);
+            truncate_to = slot + 1;
+            break;
         }
     }
-    // TODO shrink `map`
+    // Truncate unused connections.
+    size_t length = (char *)&map->addr->connections[truncate_to] - (char *)map->addr;
+    // TODO truncate `map`
     return 0;
 }
 
@@ -340,12 +319,39 @@ static int ipc_close(const char *action, size_t slot, int fd, const char *tail, 
 
     atomic_store_explicit(&conn->state, CONN_UNUSED, memory_order_release);
 
-    return rc;
+    return 0;
+}
+
+/**
+ * Send an already connected upstream file descriptor.
+ */
+static int ipc_orphan_upstream(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
+    (void)action, (void)tail;
+    struct ipc_context *ctx = ctx_;
+    struct connection *conn = shared_memory_get_connection(ctx->map, slot);
+    assert(conn);
+
+    // `connect` should not receive a file descriptor.
+    if(fd >= 0) {
+        LOG(LOG_ERROR, "IPC connect should not received a file descriptor fd=%d\n", fd);
+        if(closep(&fd) < 0) {
+            perror("close");
+        }
+    }
+
+    // Respond the connected socket.
+    if(ipc_send(ctx->ipc_fd, "orphan_up", slot, conn->upstream.fd[0], NULL) < 0) {
+        perror("ipc_send");
+        return -2;
+    }
+
+    return 0;
 }
 
 static const struct ipc_action_method ipc_methods[] = {
     {"connect", ipc_connect},
     {"close", ipc_close},
+    {"orphan_up", ipc_orphan_upstream},
     {NULL, NULL},
 };
 
@@ -470,10 +476,44 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
         }
     }
 
-    // TODO distribute orphaned connections to workers
-    LOG(LOG_INFO, "distributing orphaned connections...\n");
-    for(size_t i = 0, n = worker_process_array_len(&cmdline->worker_procs); i < n; ++i) {
-        // TODO
+    // Distribute orphaned connections to workers.
+    FOREACH_CONNECTION(conn, map) {
+        int state = atomic_load_explicit(&conn->state, memory_order_acquire);
+        if(state == CONN_UNUSED || conn->worker_pid >= 0) {
+            continue;
+        }
+        size_t slot = conn - map->addr->connections;
+        LOG(
+            LOG_INFO,
+            "slot=%zu distributing orphaned connection %d <=> %d (0x%X)\n",
+            slot,
+            conn->downstream.fd[0],
+            conn->upstream.fd[0],
+            state
+        );
+        int e = 0;
+        switch(state & CONN_STATE_BITS) {
+        case CONN_POLL:
+        case CONN_SWAP_BUFFERS:
+            // Upstream and downstreams file descriptors were saved.
+            e = ipc_send(cmdline->ipc_broadcast[1], "orphan_down", slot, conn->downstream.fd[0], NULL);
+            break;
+        case CONN_ACCEPTING:
+        case CONN_CONNECTING:
+            // Only the downstream file descriptor was saved, reconnect to
+            // upstream.
+            e = ipc_send(cmdline->ipc_broadcast[1], "accepted", slot, conn->downstream.fd[0], NULL);
+            break;
+        default:
+            ;
+            char str[512];
+            LOG(LOG_ERROR, "unexpected state %s\n", str_state(str, sizeof(str), state));
+            break;
+        }
+        if(e < 0) {
+            perror("ipc_send");
+            return 1;
+        }
     }
 
     while(1) {

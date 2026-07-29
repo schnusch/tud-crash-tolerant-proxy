@@ -125,6 +125,16 @@ struct shared_memory_mapping {
 };
 
 /**
+ * Iterate over `map->addr->connections`.
+ */
+#define FOREACH_CONNECTION(var, map) \
+    for( \
+        struct connection *var = (map)->addr->connections; \
+        (size_t)((char *)(var + 1) - (char *)(map)->addr) <= (map)->length; \
+        ++var \
+    )
+
+/**
  * Initialize mapping of shared memory in `fd` at `addr`. Create a new memfd
  * if `fd` less than zero.
  */
