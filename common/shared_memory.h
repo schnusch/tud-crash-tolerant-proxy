@@ -81,6 +81,23 @@ struct connection {
     struct connection_endpoint upstream;
 };
 
+/**
+ * Iterate `struct connection_endpoint *var` over `&conn->upstream` and
+ * `&conn->downstream`.
+ *
+ * (A helper variable `struct connection_endpoint **${var}_ptr` is used.)
+ */
+#define FOREACH_CONNECTION_ENDPOINT(var, conn) \
+    for( \
+        struct connection_endpoint *var, **var##_ptr = (struct connection_endpoint *[]){ \
+            &(conn)->upstream, \
+            &(conn)->downstream, \
+            NULL \
+        }; \
+        (var = *var##_ptr); \
+        ++var##_ptr \
+    )
+
 // C++ does not know about atomic_size_t.
 #ifdef __cplusplus
 #include <atomic>
