@@ -217,12 +217,12 @@ TEST_F(worker, one) {
     ASSERT_EQ(shutdown(downstream, SHUT_WR), 0);
 
     // send download
-    memset(tx, 'A', sizeof(tx));
+    memset(tx, 'b', sizeof(tx));
     ASSERT_EQ(send(upstream, tx, sizeof(tx), 0), sizeof(tx));
 
     // recv upload
     ASSERT_EQ(recv(upstream, rx, sizeof(rx), 0), sizeof(rx));
-    memset(tx, 'b', sizeof(tx));
+    memset(tx, 'a', sizeof(tx));
     EXPECT_EQ(std::string(rx, sizeof(rx)), std::string(tx, sizeof(tx)));
     ASSERT_EQ(recv(upstream, rx, sizeof(rx), 0), 0);
 
@@ -230,17 +230,17 @@ TEST_F(worker, one) {
 
     // recv download
     ASSERT_EQ(recv(downstream, rx, sizeof(rx), 0), sizeof(rx));
-    memset(tx, 'B', sizeof(tx));
+    memset(tx, 'b', sizeof(tx));
     EXPECT_EQ(std::string(rx, sizeof(rx)), std::string(tx, sizeof(tx)));
 
     // send more download
-    memset(tx, 'C', sizeof(tx));
+    memset(tx, 'c', sizeof(tx));
     ASSERT_EQ(send(upstream, tx, sizeof(tx), 0), sizeof(tx));
     ASSERT_EQ(shutdown(upstream, SHUT_WR), 0);
 
     // recv download
     ASSERT_EQ(recv(downstream, rx, sizeof(rx), 0), sizeof(rx));
-    memset(tx, 'D', sizeof(tx));
+    memset(tx, 'c', sizeof(tx));
     EXPECT_EQ(std::string(rx, sizeof(rx)), std::string(tx, sizeof(tx)));
     ASSERT_EQ(recv(downstream, rx, sizeof(rx), 0), 0);
 }
@@ -256,36 +256,36 @@ TEST_F(worker, two) {
     char tx[512];
 
     // send upload on connection 2
-    memset(tx, 'y', sizeof(tx));
+    memset(tx, 'A', sizeof(tx));
     ASSERT_EQ(send(downstream2, tx, sizeof(tx), 0), sizeof(tx));
     ASSERT_EQ(shutdown(downstream2, SHUT_WR), 0);
     // send download on connection 2
-    memset(tx, 'Y', sizeof(tx));
+    memset(tx, 'B', sizeof(tx));
     ASSERT_EQ(send(upstream2, tx, sizeof(tx), 0), sizeof(tx));
 
     // send upload on connection 1
-    memset(tx, 'a', sizeof(tx));
+    memset(tx, 'C', sizeof(tx));
     ASSERT_EQ(send(downstream1, tx, sizeof(tx), 0), sizeof(tx));
     ASSERT_EQ(shutdown(downstream1, SHUT_WR), 0);
     // send download on connection 1
-    memset(tx, 'A', sizeof(tx));
+    memset(tx, 'D', sizeof(tx));
     ASSERT_EQ(send(upstream1, tx, sizeof(tx), 0), sizeof(tx));
     ASSERT_EQ(shutdown(upstream1, SHUT_WR), 0);
 
     // receive upload from connection 2
     ASSERT_EQ(recv(upstream2, rx, sizeof(rx), 0), sizeof(rx));
-    memset(tx, 'z', sizeof(tx));
+    memset(tx, 'A', sizeof(tx));
     EXPECT_EQ(std::string(rx, sizeof(rx)), std::string(tx, sizeof(tx)));
     ASSERT_EQ(recv(upstream2, rx, sizeof(rx), 0), 0);
 
     // receive upload on connection 1
     ASSERT_EQ(recv(upstream1, rx, sizeof(rx), 0), sizeof(rx));
-    memset(tx, 'b', sizeof(tx));
+    memset(tx, 'C', sizeof(tx));
     EXPECT_EQ(std::string(rx, sizeof(rx)), std::string(tx, sizeof(tx)));
     ASSERT_EQ(recv(upstream1, rx, sizeof(rx), 0), 0);
     // receive download on connection 1
     ASSERT_EQ(recv(downstream1, rx, sizeof(rx), 0), sizeof(rx));
-    memset(tx, 'B', sizeof(tx));
+    memset(tx, 'D', sizeof(tx));
     EXPECT_EQ(std::string(rx, sizeof(rx)), std::string(tx, sizeof(tx)));
     ASSERT_EQ(recv(downstream1, rx, sizeof(rx), 0), 0);
 
@@ -293,17 +293,17 @@ TEST_F(worker, two) {
 
     // receive download on connection 2
     ASSERT_EQ(recv(downstream2, rx, sizeof(rx), 0), sizeof(rx));
-    memset(tx, 'Z', sizeof(tx));
+    memset(tx, 'B', sizeof(tx));
     EXPECT_EQ(std::string(rx, sizeof(rx)), std::string(tx, sizeof(tx)));
 
     // send more download on connection 2
-    memset(tx, 'W', sizeof(tx));
+    memset(tx, 'E', sizeof(tx));
     ASSERT_EQ(send(upstream2, tx, sizeof(tx), 0), sizeof(tx));
     ASSERT_EQ(shutdown(upstream2, SHUT_WR), 0);
 
     // receive more download on connection 2
     ASSERT_EQ(recv(downstream2, rx, sizeof(rx), 0), sizeof(rx));
-    memset(tx, 'X', sizeof(tx));
+    memset(tx, 'E', sizeof(tx));
     EXPECT_EQ(std::string(rx, sizeof(rx)), std::string(tx, sizeof(tx)));
     ASSERT_EQ(recv(downstream2, rx, sizeof(rx), 0), 0);
 }
