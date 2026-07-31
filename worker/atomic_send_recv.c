@@ -158,7 +158,7 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
         fd,
         &(struct msghdr){
             .msg_iov = iov,
-            .msg_iovlen = set_iovec_used(iov, buf),
+            .msg_iovlen = set_iovec_used(iov, buf->buf, ACTIVE_RANGE(buf)),
         },
         MSG_DONTWAIT
     );
@@ -237,7 +237,7 @@ int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
         fd,
         &(struct msghdr){
             .msg_iov = iov,
-            .msg_iovlen = set_iovec_unused(iov, buf),
+            .msg_iovlen = set_iovec_unused(iov, buf->buf, ACTIVE_RANGE(buf)),
         },
         MSG_DONTWAIT
     );
