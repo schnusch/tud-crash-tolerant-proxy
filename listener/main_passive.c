@@ -114,12 +114,11 @@ int main_passive(int argc, char **argv) {
 
     // Initialize shared memory.
     struct shared_memory_mapping map;
-    if(shared_memory_open(&map, cmdline.shared_mem_fd, cmdline.shared_mem_addr) < 0) {
+    if(shared_memory_open(&map, cmdline.shared_mem_fd) < 0) {
         perror("shared_memory_open");
         return 1;
     }
     cmdline.shared_mem_fd = map.fd;
-    cmdline.shared_mem_addr = map.addr;
 
     // Create broadcast IPC socket pair.
     if(cmdline.ipc_broadcast[0] < 0 || cmdline.ipc_broadcast[1] < 0) {

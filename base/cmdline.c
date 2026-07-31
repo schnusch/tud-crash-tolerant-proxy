@@ -32,9 +32,6 @@ enum getopt_result {
 static const struct option long_options[] = {
     {"help", no_argument, NULL, OPT_HELP},
     {"shared-memory-fd", required_argument, NULL, OPT_SHARED_FD},
-#ifndef SHARED_MEMORY_RELOCATABLE
-    {"shared-memory-address", required_argument, NULL, OPT_SHARED_ADDR},
-#endif
     {"upstream-address", required_argument, NULL, OPT_UPSTREAM_ADDR},
     {"ipc-broadcast", required_argument, NULL, OPT_IPC_BROADCAST},
 #ifdef CMDLINE_WORKER
@@ -77,9 +74,6 @@ static const struct {
     {OPT_LISTEN_FD, "listening file descriptors on which incoming connections are accepted"},
     {OPT_NUM_WORKERS, "number of worker processes"},
     {OPT_SHARED_FD, "file descriptor of the shared memory"},
-#ifndef SHARED_MEMORY_RELOCATABLE
-    {OPT_SHARED_ADDR, "address of the shared memory"},
-#endif
     {OPT_UPSTREAM_ADDR, "upstream address to forward incoming connections to"},
     {OPT_WORKER_BIN, "path to the executable of the worker"},
     {OPT_WORKER_PROCESS, "IPC_FD:PID pair of a worker process"},
@@ -186,39 +180,6 @@ static int atofd(const char *str, const char *argv0) {
     return fd;
 }
 
-#ifndef SHARED_MEMORY_RELOCATABLE
-/**
- * Parse `str` to a pointer using `strtoull(2)`.
- * \return the pointer
- * \return NULL on error
- */
-static void *atoptr(const char *str, const char *argv0) {
-    errno = 0;
-    char *end;
-    unsigned long long ll = strtoull(optarg, &end, 0);
-    if(errno != 0 || *end != '\0') {
-        goto error;
-    }
-    // (Mis-)use __builtin_add_overflow to detect overflow in conversion
-    // from unsigned long long to uintptr_t.
-    uintptr_t ptr;
-    if(__builtin_add_overflow(ll, 0, &ptr)) {
-        errno = EINVAL;
-        goto error;
-    }
-    return (void *)ptr;
-
-error:
-    fprintf(stderr, "%s: invalid pointer '%s'%s%s\n",
-        argv0,
-        str,
-        errno == 0 ? "" : ": ",
-        errno == 0 ? "" : strerror(errno)
-    );
-    return NULL;
-}
-#endif
-
 #ifdef CMDLINE_LISTENER
 static int parse_worker_process_arg(struct cmdline_opts *cmdline, const char *arg) {
     char *delim_ptr[2];
@@ -291,7 +252,6 @@ _Static_assert(
 int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv) {
     *cmdline = (struct cmdline_opts){
         (int)-1, // shared_mem_fd
-        NULL, // shared_mem_addr
         (struct sockaddr_storage){ .ss_family = -1 }, // upstream_addr
 #ifdef CMDLINE_WORKER
         (int)-1, // ipc_broadcast
@@ -329,14 +289,6 @@ int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv) {
                 return -1;
             }
             break;
-#ifndef SHARED_MEMORY_RELOCATABLE
-        case OPT_SHARED_ADDR:
-            // Parse shared memory address.
-            if(!(cmdline->shared_mem_addr = atoptr(optarg, argv[0]))) {
-                return -1;
-            }
-            break;
-#endif
         case OPT_UPSTREAM_ADDR:
             // Parse upstream address.
             if(parse_sockaddr(&cmdline->upstream_addr, optarg) < 0) {
@@ -491,13 +443,6 @@ int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv) {
     }
 #endif
 
-#ifndef SHARED_MEMORY_RELOCATABLE
-    if((cmdline->shared_mem_fd == -1) ^ (cmdline->shared_mem_addr == NULL)) {
-        fprintf(stderr, "%s: either both or neither of --shared-memory-fd and --shared-memory-address must be specified\n", argv[0]);
-        return -1;
-    }
-#endif
-
     return 0;
 }
 
@@ -580,9 +525,6 @@ static int cmdline_append_common(char ***argv, const struct cmdline_opts *cmdlin
         !format_sockaddr(str_addr, (struct sockaddr *)&cmdline->upstream_addr)
         || argv_append(argv, "--upstream-address=%s", str_addr) < 0
         || argv_append(argv, "--shared-memory-fd=%d", cmdline->shared_mem_fd) < 0
-#ifndef SHARED_MEMORY_RELOCATABLE
-        || argv_append(argv, "--shared-memory-addr=%p", (void *)cmdline->shared_mem_addr) < 0
-#endif
     ) ? -1 : 0;
 }
 

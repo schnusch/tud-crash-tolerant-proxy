@@ -27,7 +27,7 @@ int worker_process_array_init(struct worker_process_array *arr) {
         }
         CAST(arr)->fd = fd;
     }
-    if(shared_memory_open(CAST(arr), CAST(arr)->fd, NULL) < 0) {
+    if(shared_memory_open(CAST(arr), CAST(arr)->fd) < 0) {
         if(fd >= 0) {
             closep(&CAST(arr)->fd);
         }

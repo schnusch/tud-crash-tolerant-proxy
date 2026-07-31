@@ -810,7 +810,7 @@ int main(int argc, char **argv) {
         .upstream_addr = &cmdline.upstream_addr,
     };
 
-    if(shared_memory_open(&ctx.map, cmdline.shared_mem_fd, cmdline.shared_mem_addr) < 0) {
+    if(shared_memory_open(&ctx.map, cmdline.shared_mem_fd) < 0) {
         perror("shared_memory_open");
         return 1;
     }

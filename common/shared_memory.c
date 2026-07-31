@@ -54,14 +54,7 @@ more:
     return buf;
 }
 
-int shared_memory_open(struct shared_memory_mapping *map, int fd, struct shared_memory *hint) {
-#ifndef SHARED_MEMORY_RELOCATABLE
-    if(hint) {
-        errno = EINVAL;
-        return -1;
-    }
-#endif
-
+int shared_memory_open(struct shared_memory_mapping *map, int fd) {
     static const struct shared_memory init = {
         .size = sizeof(init),
     };
@@ -92,12 +85,8 @@ init:
         }
     }
 
-    int flags = MAP_SHARED;
-    if(hint) {
-        flags |= MAP_FIXED_NOREPLACE;
-    }
     map->length = sizeof(*map->addr);
-    map->addr = mmap((void *)hint, map->length, PROT_READ | PROT_WRITE, flags, map->fd, 0LL);
+    map->addr = mmap(NULL, map->length, PROT_READ | PROT_WRITE, MAP_SHARED, map->fd, 0LL);
     if(map->addr == MAP_FAILED) {
         goto error;
     }

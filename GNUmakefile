@@ -9,7 +9,7 @@ WORKER = libexec/crash-tolerant-proxy-worker
 
 # Pre-processor flags
 # Use $(*FLAGS) to replace default flags and $(EXTRA_*FLAGS) to append.
-CPPFLAGS = -D_GNU_SOURCE -DSHARED_MEMORY_RELOCATABLE
+CPPFLAGS = -D_GNU_SOURCE
 EXTRA_CPPFLAGS =
 final_cppflags = $(CPPFLAGS) $(EXTRA_CPPFLAGS)
 
