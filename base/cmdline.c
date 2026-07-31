@@ -624,9 +624,6 @@ char **cmdline_to_worker_argv(const struct cmdline_opts *cmdline, int ipc_broadc
     char str_addr[FORMAT_SOCKADDR_BUFLEN];
     if(
         !format_sockaddr(str_addr, (struct sockaddr *)&cmdline->upstream_addr)
-#ifdef USE_VALGRIND
-        || argv_append(&argv, "valgrind") < 0
-#endif
         || argv_append(&argv, "%s", cmdline->worker) < 0
         || (
             ipc_broadcast >= 0

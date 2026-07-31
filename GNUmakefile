@@ -9,7 +9,7 @@ WORKER = libexec/crash-tolerant-proxy-worker
 
 # Pre-processor flags
 # Use $(*FLAGS) to replace default flags and $(EXTRA_*FLAGS) to append.
-CPPFLAGS = -D_GNU_SOURCE -DSHARED_MEMORY_RELOCATABLE -DHAVE_SYSTEMD -DUSE_LIBBACKTRACE -DUSE_VALGRIND
+CPPFLAGS = -D_GNU_SOURCE -DSHARED_MEMORY_RELOCATABLE
 EXTRA_CPPFLAGS =
 final_cppflags = $(CPPFLAGS) $(EXTRA_CPPFLAGS)
 
@@ -23,7 +23,7 @@ final_cflags = $(CFLAGS) $(EXTRA_CFLAGS) -std=c99 -Werror=vla \
 
 # Linker flags
 # Use $(*FLAGS) to replace default flags and $(EXTRA_*FLAGS) to append.
-LDFLAGS = -lbacktrace -Llibcrash/nop -lcrash -Wl,-rpath,'$$ORIGIN/../libcrash/nop'
+LDFLAGS = -Llibcrash/nop -lcrash -Wl,-rpath,'$$ORIGIN/../libcrash/nop'
 EXTRA_LDFLAGS = #-fsanitize=address,undefined
 final_ldflags = $(LDFLAGS) $(EXTRA_LDFLAGS)
 
@@ -39,17 +39,20 @@ WORKER_SRCS = $(shell find worker -xtype f -name '*.c') \
 	thirdparty/picohttpparser/picohttpparser.c
 WORKER_OBJS = $(patsubst %.c,obj/%.o,$(WORKER_SRCS))
 
-MAKE_LIBCRASH_NOP = $(MAKE) -C libcrash CPPFLAGS='$(final_cppflags)' CFLAGS='$(final_cflags)' nop/libcrash.so
+MAKE_LIBCRASH = $(MAKE) \
+	-C libcrash \
+	CPPFLAGS='$(filter-out -DUSE_LIBBACKTRACE -DUSE_SYSTEMD,$(final_cppflags))' \
+	CFLAGS='$(final_cflags)'
 
 # *.o are located in obj/, executables in bin/.
 
 .PHONY: all check clean install
 
 all: bin/listener bin/worker
-	$(MAKE) -C libcrash CPPFLAGS='$(final_cppflags)' CFLAGS='$(final_cflags)' $@
+	$(MAKE_LIBCRASH) $@
 
 check:
-	$(MAKE) -C tests CPPFLAGS='$(final_cppflags)' $@
+	$(MAKE) -C tests CPPFLAGS='$(final_cppflags)' LDFLAGS='$(filter -lbacktrace -lsystemd,$(final_ldflags))' $@
 
 doc: Doxyfile $(LISTENER_SRCS) $(WORKER_SRCS)
 	{ cat Doxyfile && echo 'OUTPUT_DIRECTORY = ./$@.tmp'; } | doxygen -
@@ -67,15 +70,15 @@ install: bin/listener bin/worker
 
 bin/launcher: obj/launcher.o obj/common/util.o
 	@mkdir -p $(@D)
-	$(CC) -o $@ $^ -lbacktrace
+	$(CC) -o $@ $^ $(filter -lbacktrace,$(final_ldflags))
 
 bin/listener: $(LISTENER_OBJS)
-	$(MAKE_LIBCRASH_NOP)
+	$(MAKE_LIBCRASH) nop/libcrash.so
 	@mkdir -p $(@D)
-	$(CC) -o $@ $(LISTENER_OBJS) $(final_ldflags) -lsystemd
+	$(CC) -o $@ $(LISTENER_OBJS) $(final_ldflags)
 
 bin/worker: $(WORKER_OBJS)
-	$(MAKE_LIBCRASH_NOP)
+	$(MAKE_LIBCRASH) nop/libcrash.so
 	@mkdir -p $(@D)
 	$(CC) -o $@ $(WORKER_OBJS) $(final_ldflags)
 
