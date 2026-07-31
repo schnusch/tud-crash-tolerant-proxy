@@ -37,9 +37,19 @@
               )
               (
                 pkg:
-                pkg.overrideAttrs (_: {
+                pkg.overrideAttrs (prevAttrs: {
                   pname = "performance-baseline";
                   doCheck = false;
+
+                  preBuild = ''
+                    ${prevAttrs.preBuild or ""}
+                    sed -e '/^all:/ s,,& bin/launcher,' -i GNUmakefile
+                  '';
+
+                  postInstall = ''
+                    ${prevAttrs.postInstall or ""}
+                    cp bin/launcher "$out/bin/crash-tolerant-proxy"
+                  '';
                 })
               )
             ];

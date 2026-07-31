@@ -115,11 +115,6 @@ protected:
         this->ipc = socketpair_ipc();
 
         static char *const argv[] = {
-#ifdef USE_VALGRIND
-            "valgrind",
-            "--leak-check=full",
-            "--",
-#endif
             "../bin/worker",
             "--upstream-addr=[::1]:0",
             "--ipc-direct=0",

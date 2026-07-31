@@ -17,6 +17,12 @@ OBJS = \
 CPPFLAGS =
 final_cppflags := $(CPPFLAGS) $(shell pkgconf --cflags gtest)
 
+CXXFLAGS =
+final_cxxflags = $(CXXFLAGS)
+
+LDFLAGS =
+final_ldflags := $(LDFLAGS) $(shell pkgconf --libs gtest)
+
 .PHONY: check clean
 
 check: main
@@ -28,7 +34,7 @@ clean:
 
 main: main.o $(OBJS) $(PREREQS)
 	$(MAKE) -C .. final_cppflags='$(final_cppflags) -DUSE_LIBCRASH' $(patsubst ../%,%,$(PREREQS))
-	$(CXX) $(final_cppflags) $(final_cxxflags) -o $@ $< $(OBJS) $(PREREQS) $(shell pkgconf --libs gtest)
+	$(CXX) $(final_cppflags) $(final_cxxflags) -o $@ $< $(OBJS) $(PREREQS) $(final_ldflags)
 
 ../%.o: main.cc
 	$(MAKE) -C .. final_cppflags='$(final_cppflags) -DUSE_LIBCRASH' $(patsubst ../%,%,$@)

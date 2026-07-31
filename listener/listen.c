@@ -5,7 +5,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#ifdef HAVE_SYSTEMD
+#ifdef USE_SYSTEMD
 #include <systemd/sd-daemon.h>
 #endif
 
@@ -67,7 +67,7 @@ int ensure_stdio_no_listen(struct cmdline_opts *cmdline) {
 }
 
 int add_systemd_listen_fds(struct cmdline_opts *cmdline, int unset) {
-#ifdef HAVE_SYSTEMD
+#ifdef USE_SYSTEMD
     // Use listening sockets from systemd.
     int new_listen_fds = sd_listen_fds(unset);
     if(new_listen_fds < 0) {

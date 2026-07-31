@@ -66,9 +66,6 @@ TEST(cmdline_to_worker_argv, broadcast) {
         .sin6_addr = IN6ADDR_LOOPBACK_INIT,
     };
     const char *expected[] = {
-#ifdef USE_VALGRIND
-        "valgrind",
-#endif
         "foo",
         "--ipc-broadcast=3",
         "--ipc-direct=0",
