@@ -138,7 +138,7 @@ struct shared_memory_mapping {
  * Initialize mapping of shared memory in `fd` at `addr`. Create a new memfd
  * if `fd` less than zero.
  */
-int shared_memory_open(struct shared_memory_mapping *map, int fd, struct shared_memory *hint);
+int shared_memory_open(struct shared_memory_mapping *map, int fd);
 
 /**
  * Update the mapping of the shared memory from the size stored its header.

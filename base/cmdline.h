@@ -11,8 +11,6 @@
 struct cmdline_opts {
     /** File descriptor of the shared memory. */
     int shared_mem_fd;
-    /** Address of the shared memory. */
-    struct shared_memory *shared_mem_addr;
     /** Upstream address to forward incoming connections to. */
     struct sockaddr_storage upstream_addr;
 #ifdef CMDLINE_WORKER
