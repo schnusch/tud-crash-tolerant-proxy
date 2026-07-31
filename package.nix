@@ -46,6 +46,7 @@ stdenv.mkDerivation {
   passthru.thesis = callPackage ./thesis/package.nix { };
 
   meta = {
+    mainProgram = "crash-tolerant-proxy";
     maintainers = with lib.maintainers; [ schnusch ];
   };
 }
