@@ -1,0 +1,78 @@
+networks:
+  net:
+    external: false
+    internal: true
+
+services:
+  nginx:
+    image: docker.io/library/nginx:1.30.4-alpine3.24
+    volumes:
+    - type: bind
+      source: @nginxFiles@
+      target: /usr/share/nginx/html
+      read_only: true
+    ports:
+    - published: @nginxPort@
+      target: 80
+    networks:
+    - net
+
+  baseline:
+    build: &scratch
+      context: ./empty/ # The trailing slash resolves symlinks.
+      dockerfile_inline: |
+        FROM scratch
+    volumes:
+    - &tmp
+      type: tmpfs
+      target: /tmp
+    - &nix_store
+      type: bind
+      source: /nix/store
+      target: /nix/store
+      read_only: true
+    init: true
+    command: @baselineCommand@
+    env_file:
+    - ./proxy.env
+    ports:
+    - published: @baselinePort@
+      target: 80
+    networks:
+    - net
+    depends_on:
+    - nginx
+
+  proxy:
+    build: *scratch
+    volumes:
+    - *tmp
+    - *nix_store
+    init: true
+    command: @proxyCommand@
+    env_file:
+    - ./proxy.env
+    ports:
+    - published: @proxyPort@
+      target: 80
+    networks:
+    - net
+    depends_on:
+    - nginx
+
+  benchmark:
+    build: *scratch
+    volumes:
+    - *nix_store
+    - type: bind
+      source: ./benchmark/ # The trailing slash resolves symlinks.
+      target: /run/benchmark
+    init: true
+    command: @benchmarkCommand@
+    env_file:
+    - ./benchmark.env
+    networks:
+    - net
+    depends_on:
+    - baseline
+    - proxy
