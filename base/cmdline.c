@@ -425,11 +425,20 @@ int parse_cmdline(struct cmdline_opts *cmdline, int argc, char **argv) {
     list_fds(LOG_DEBUG);
 #endif
 
+    if(optind < argc) {
+        fprintf(stderr, "%s: unexpected argument: %s\n", argv[0], argv[optind]);
+        return -1;
+    }
     if(cmdline->upstream_addr.ss_family == (sa_family_t)-1) {
         fprintf(stderr, "%s: missing required option: --upstream-address\n", argv[0]);
         return -1;
     }
 #ifdef CMDLINE_LISTENER
+    if(cmdline->num_listen_fds == 0 && cmdline->num_listen_addrs == 0) {
+        fprintf(stderr, "%s: at least one --listen or --listen-fd option required\n", argv[0]);
+        return -1;
+    }
+
     // Reserve as much `struct worker_proc` as given by --num-workers.
     if(!worker_process_array_get(&cmdline->worker_procs, num_worker_procs - 1)) {
         perror("pwritev");
