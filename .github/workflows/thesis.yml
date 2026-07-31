@@ -1,8 +1,8 @@
 on:
-  pull_request: *push
-  push: &push
+  pull_request: &pr
     paths:
     - "thesis/**"
+  push: &pr
 jobs:
   nix_build:
     runs-on: ubuntu-latest
