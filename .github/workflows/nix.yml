@@ -1,0 +1,103 @@
+on:
+  push: {}
+  pull_request: {}
+
+env:
+  cache_key: 624af665418d3c65d544145b4d34ad696439570e
+  cache_path: /tmp/nix-cache
+  nix_copy_from: nix copy --no-check-sigs --from file:///tmp/nix-cache '.?submodules=1#devShell' || true
+
+jobs:
+  setup-nix:
+    runs-on: ubuntu-latest
+    steps:
+    - id: restore-nix-cache
+      uses: actions/cache/restore@v4
+      with:
+        key: ${{ env.cache_key }}
+        path: ${{ env.cache_path }}
+    - if: steps.restore-nix-cache.outputs.cache-hit != 'true'
+      uses: cachix/install-nix-action@v31
+    - if: steps.restore-nix-cache.outputs.cache-hit != 'true'
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - if: steps.restore-nix-cache.outputs.cache-hit != 'true'
+      run: nix copy --to file://${{ env.cache_path }} '.?submodules=1#devShell'
+    - if: steps.restore-nix-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        key: ${{ env.cache_key }}
+        path: ${{ env.cache_path }}
+
+  doxygen:
+    runs-on: ubuntu-latest
+    needs:
+    - setup-nix
+    steps:
+    - uses: actions/cache/restore@v4
+      with:
+        key: ${{ env.cache_key }}
+        path: ${{ env.cache_path }}
+    - uses: cachix/install-nix-action@v31
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - run: ${{ env.nix_copy_from }}
+    - run: nix run .#ci.doxygen
+    - uses: actions/upload-pages-artifact@v3
+      with:
+        path: doc/html
+
+  nix_build:
+    strategy:
+      fail-fast: false
+      matrix:
+        attr:
+        - "#default"
+        - "#performance-baseline"
+    runs-on: ubuntu-latest
+    needs:
+    - setup-nix
+    steps:
+    - uses: actions/cache/restore@v4
+      with:
+        key: ${{ env.cache_key }}
+        path: ${{ env.cache_path }}
+    - uses: cachix/install-nix-action@v31
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - run: ${{ env.nix_copy_from }}
+    - run: nix build -L '.?submodules=1${{ matrix.attr }}'
+      timeout-minutes: 3
+
+  benchmark:
+    strategy:
+      fail-fast: false
+      matrix:
+        attr:
+        - "#compose.ab"
+        benchmark_host:
+        - baseline.
+        - nginx.
+        - proxy.
+    runs-on: ubuntu-latest
+    needs:
+    - setup-nix
+    steps:
+    - uses: actions/cache/restore@v4
+      with:
+        key: ${{ env.cache_key }}
+        path: ${{ env.cache_path }}
+    - uses: cachix/install-nix-action@v31
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - run: ${{ env.nix_copy_from }}
+    - run: nix build -L '.?submodules=1${{ matrix.attr }}'
+      timeout-minutes: 3
+    - run: BENCHMARK_HOST='${{ matrix.benchmark_host }}' nix run -L '.?submodules=1${{ matrix.attr }}'
+    - uses: actions/upload-artifact@v4
+      with:
+        path: benchmark/

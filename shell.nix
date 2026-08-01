@@ -23,8 +23,7 @@ package.override (prev: {
       }:
       pkgs.mkShell {
         buildInputs = buildInputs ++ checkInputs;
-        nativeBuildInputs =
-          nativeBuildInputs ++ nativeCheckInputs ++ package.thesis.nativeBuildInputs ++ extraPackages;
+        nativeBuildInputs = nativeBuildInputs ++ nativeCheckInputs ++ extraPackages;
       };
   };
 })

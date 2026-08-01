@@ -66,10 +66,12 @@
         in
         proxyPkgs
         // {
+          devShell = pkgs.callPackage ./shell.nix { };
+
           compose =
             let
               escapeDollarSigns = builtins.replaceStrings [ "$" ] [ "$$" ];
-              commonCommand = [
+              commandPrefix = [
                 # Resolve and append upstream address.
                 pkgs.runtimeShell
                 "-c"
@@ -96,14 +98,14 @@
               baselinePort = 12346;
               nginxPort = 12347;
               proxyCommand = map escapeDollarSigns (
-                commonCommand ++ [ (lib.getExe self.packages.${system}.default) ]
+                commandPrefix ++ [ (lib.getExe self.packages.${system}.default) ]
               );
               baselineCommand = map escapeDollarSigns (
-                commonCommand ++ [ (lib.getExe self.packages.${system}.performance-baseline) ]
+                commandPrefix ++ [ (lib.getExe self.packages.${system}.performance-baseline) ]
               );
             in
             lib.flip lib.mapAttrs (import ./benchmarks.nix { inherit pkgs; }) (
-              _: benchmarkCommand:
+              _: benchmarkScript:
               pkgs.replaceVarsWith {
                 src = ./compose.yaml;
                 replacements = lib.mapAttrs (_: builtins.toJSON) {
@@ -115,12 +117,23 @@
                     proxyCommand
                     proxyPort
                     ;
-                  benchmarkCommand = map escapeDollarSigns benchmarkCommand;
+                  benchmarkCommand = map escapeDollarSigns [
+                    pkgs.runtimeShell
+                    "-c"
+                    (
+                      ''
+                        set -euo pipefail
+                      ''
+                      + benchmarkScript
+                    )
+                  ];
                 };
               }
             );
         }
       );
+
+      devShells = forAllSystemsWithPkgs (system: pkgs: self.packages.${system}.devShell);
 
       apps = forAllSystemsWithPkgs (
         system: pkgs: {
@@ -146,16 +159,25 @@
                     ln -s ${compose} compose.yaml
                     cat compose.yaml
 
-                    tee proxy.env << eof
+                    tee proxy.env >&2 << eof
                   LOG_LEVEL=''${LOG_LEVEL:-2147483646}
                   eof
 
-                    tee benchmark.env << eof
-                  BENCHMARK_TSV=result.tsv
-                  BENCHMARK_HOST=''${1-proxy.}
-                  BENCHMARK_FILE=1M
-                  BENCHMARK_REQUESTS=100
-                  BENCHMARK_PARALLEL=10
+                    tee benchmark.env >&2 << eof
+                  ${
+                    let
+                      defaults = {
+                        BENCHMARK_TSV = "result.tsv";
+                        BENCHMARK_HOST = "proxy.";
+                        BENCHMARK_FILE = "1M";
+                        BENCHMARK_REQUESTS = "100";
+                        BENCHMARK_PARALLEL = "10";
+                      };
+                    in
+                    lib.concatStringsSep "\n" (
+                      lib.mapAttrsToList (k: v: "${k}=\${${k}-${lib.escapeShellArg v}}") defaults
+                    )
+                  }
                   eof
 
                     exec ${lib.getExe pkgs.podman-compose} --podman-path=${lib.getExe pkgs.podman} up --exit-code-from=benchmark
@@ -166,6 +188,12 @@
               );
             }
           );
+          ci = {
+            doxygen = {
+              type = "app";
+              program = lib.getExe pkgs.doxygen;
+            };
+          };
         }
       );
     };
