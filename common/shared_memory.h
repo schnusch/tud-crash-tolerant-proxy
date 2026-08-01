@@ -54,14 +54,6 @@ struct connection_endpoint {
     struct sockaddr_storage addr;
     /** Remote address of the incoming connection, set by `accept(2)`. */
     socklen_t addrlen;
-    /**
-     * Bitmask of `1 << SHUT_WR` and `1 << SHUT_RD`.
-     * If `1 << SHUT_WR` is set then `shutdown(SHUT_WR)` will be called once the
-     * `tx` buffer is drained.
-     * If `1 << SHUT_RD` is set EOF was reached (or `shutdown(SHUT_RD)` was
-     * called).
-     */
-    int shutdown;
     /** Received data. */
     struct atomic_ring_buffer rx;
     /** Pending data to send. */

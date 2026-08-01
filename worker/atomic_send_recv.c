@@ -306,6 +306,7 @@ int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
         *INACTIVE_RANGE(buf) = (struct ring_buffer_range){
             .start = ACTIVE_RANGE(buf)->start,
             .len = ACTIVE_RANGE(buf)->len + buf->mm.msg_len,
+            .shutdown = ACTIVE_RANGE(buf)->shutdown,
         };
         LIBCRASH_HOOK(atomic_ring_buffer_append(buf, !!buf->active));
         buf->active = !buf->active;
