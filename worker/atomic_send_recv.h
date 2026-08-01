@@ -7,6 +7,7 @@
 #else
  #include <stdatomic.h>
 #endif
+#include <stdbool.h>
 #include <sys/socket.h>
 
 /**
@@ -37,6 +38,14 @@ struct ring_buffer_range {
     size_t start;
     /** Number of bytes used in `atomic_ring_buffer::buf`. */
     size_t len;
+    /**
+     * Whether `shutdown(2)` was called on the underlying buffer. Can mean
+     * either `SHUT_RD` or `SHUT_WR` depending on if this is a receive or send
+     * buffer.
+     *
+     * This really does not really belong here but fits quite well.
+     */
+    bool shutdown;
 };
 
 /**

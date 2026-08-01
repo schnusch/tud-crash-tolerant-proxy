@@ -90,7 +90,7 @@ static int epoll_from_buffers(struct context *ctx, struct connection_endpoint *e
     }
     if(
         ACTIVE_RANGE(&endpoint->rx)->len < sizeof(endpoint->rx.buf)
-        && !(endpoint->shutdown & (1 << SHUT_RD))
+        && !ACTIVE_RANGE(&endpoint->rx)->shutdown
     ) {
         events |= EPOLLIN | EPOLLRDHUP;
     }
@@ -108,7 +108,7 @@ static int epoll_from_buffers(struct context *ctx, struct connection_endpoint *e
         "slot=%zu     => fd=%d%s events=%s\n",
         info->slot,
         endpoint->fd[1],
-        (endpoint->shutdown & (1 << SHUT_RD)) ? " (eof)" : "",
+        ACTIVE_RANGE(&endpoint->rx)->shutdown ? " (eof)" : "",
         epoll_str(epoll, sizeof(epoll), events)
     );
     if(epoll_mod(ctx, endpoint->fd[1], events) < 0) {
@@ -126,14 +126,14 @@ static int epoll_from_buffers(struct context *ctx, struct connection_endpoint *e
  * Set `1 << SHUT_WR` for `dst` and call `shutdown(src->fd[1], SHUT_RD)`.
  */
 static void shutdown_direction(struct connection_endpoint *dst, struct connection_endpoint *src) {
-    dst->shutdown |= 1 << SHUT_WR;
-    if(src->shutdown & (1 << SHUT_RD)) {
+    INACTIVE_RANGE(&dst->tx)->shutdown = -1;
+    if(INACTIVE_RANGE(&src->rx)->shutdown) {
         return;
     }
     if(shutdown(src->fd[1], SHUT_RD) < 0) {
         perror("shutdown(SHUT_RD)");
     } else {
-        src->shutdown |= 1 << SHUT_RD;
+        INACTIVE_RANGE(&src->rx)->shutdown = -1;
     }
 }
 
@@ -267,7 +267,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             // Shutdown one direction of the connenction, if the send buffers
             // are drained.
             if(
-                (endpoint->shutdown & (1 << SHUT_WR))
+                ACTIVE_RANGE(&endpoint->tx)->shutdown
                 && ACTIVE_RANGE(&endpoint->tx)->len == 0
             ) {
                 LOG(LOG_DEBUG, "slot=%zu shutdown(%d, SHUT_WR)\n", info->slot, endpoint->fd[1]);
@@ -280,7 +280,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
         // Read as much data as possible.
         if(
             (events & (EPOLLIN | EPOLLRDHUP | EPOLLERR | EPOLLHUP))
-            && !(endpoint->shutdown & (1 << SHUT_RD))
+            && !ACTIVE_RANGE(&endpoint->rx)->shutdown
         ) {
             int rc;
             size_t old_len = ACTIVE_RANGE(&endpoint->rx)->len;
@@ -314,8 +314,9 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
                 || (rc < 0 && errno == EPIPE)
             ) {
                 LOG(LOG_DEBUG, "slot=%zu            eof=1\n", info->slot);
-                endpoint->shutdown |= 1 << SHUT_RD;
-                if(shutdown(endpoint->fd[1], SHUT_RD) < 0) {
+                ACTIVE_RANGE(&endpoint->rx)->shutdown = -1;
+                // shutdown(SHUT_RD) can be lost, it will be redone on EPIPE.
+                if(shutdown(endpoint->fd[1], SHUT_RD) < 0 && errno != ENOTCONN) {
                     perror("shutdown(SHUT_RD)");
                 }
             } else if(
@@ -337,16 +338,16 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             .out_range = INACTIVE_RANGE(&conn->downstream.tx),
             .in_buf = conn->upstream.rx.buf,
             .in_range = INACTIVE_RANGE(&conn->upstream.rx),
-            .eof = !!(conn->upstream.shutdown & (1 << SHUT_RD)),
-            .shutdown = !!(conn->downstream.shutdown & (1 << SHUT_WR)),
+            .eof = !!INACTIVE_RANGE(&conn->upstream.rx)->shutdown,
+            .shutdown = !!INACTIVE_RANGE(&conn->downstream.tx)->shutdown,
         };
         struct transformation_direction up = {
             .out_buf = conn->upstream.tx.buf,
             .out_range = INACTIVE_RANGE(&conn->upstream.tx),
             .in_buf = conn->downstream.rx.buf,
             .in_range = INACTIVE_RANGE(&conn->downstream.rx),
-            .eof = !!(conn->downstream.shutdown & (1 << SHUT_RD)),
-            .shutdown = !!(conn->upstream.shutdown & (1 << SHUT_WR)),
+            .eof = !!INACTIVE_RANGE(&conn->downstream.rx)->shutdown,
+            .shutdown = !!INACTIVE_RANGE(&conn->upstream.tx)->shutdown,
         };
         // Buffers length before transform (for logging).
 #define SAVE_LOG_LEN(UP_DOWN, RX_TX) size_t UP_DOWN##_##RX_TX##_len = INACTIVE_RANGE(&conn->UP_DOWN.RX_TX)->len
@@ -383,9 +384,9 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
         }
         // Both directions were shutdown and send buffers are empty.
         if(
-            (conn->downstream.shutdown & (1 << SHUT_WR))
+            INACTIVE_RANGE(&conn->downstream.tx)->shutdown
             && INACTIVE_RANGE(&conn->downstream.tx)->len == 0
-            && (conn->upstream.shutdown & (1 << SHUT_WR))
+            && INACTIVE_RANGE(&conn->upstream.tx)->shutdown
             && INACTIVE_RANGE(&conn->upstream.tx)->len == 0
         ) {
             int r;
