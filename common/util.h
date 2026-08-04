@@ -14,6 +14,11 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#define UTF8_ARROW_WEST "\xE2\x86\x90"
+#define UTF8_ARROW_NORTH "\xE2\x86\x91"
+#define UTF8_ARROW_EAST "\xE2\x86\x92"
+#define UTF8_ARROW_SOUTH "\xE2\x86\x93"
+
 /**
  * Only display log messages of a level less than or equal to this.
  */

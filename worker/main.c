@@ -17,17 +17,47 @@
 #include "../common/util.h"
 
 /**
+ * Log with a common prefix identifying the current connection.
+ * Required variables: `slot`, `conn`
+ */
+#define LOG_CONN(level, fmt, ...) LOG( \
+    level, \
+    "slot=%zu %d" UTF8_ARROW_EAST "%d: " fmt, \
+    slot, \
+    conn->downstream.fd[1], \
+    conn->upstream.fd[1], \
+    __VA_ARGS__ \
+)
+
+/**
+ * Log result of transform.
+ * Required variables: `slot`, `conn`
+ */
+#define LOG_XFRM(LEVEL, ARROW, PRE_LEN, PRE_DIFF, POST_LEN, POST_DIFF, SHUTDOWN) LOG( \
+    LEVEL, \
+    (SHUTDOWN) \
+    ? "slot=%zu %d" UTF8_ARROW_EAST "%d: xfrm " ARROW " %6zu%-+7zd " UTF8_ARROW_EAST " %6zu%-+7zd (SHUT_WR)\n" \
+    : "slot=%zu %d" UTF8_ARROW_EAST "%d: xfrm " ARROW " %6zu%-+7zd " UTF8_ARROW_EAST " %6zu%+zd\n", \
+    slot, \
+    conn->downstream.fd[1], \
+    conn->upstream.fd[1], \
+    PRE_LEN, \
+    PRE_DIFF, \
+    POST_LEN, \
+    POST_DIFF \
+)
+
+/**
  * Change `*state` and log the change.
  * \param slot      only used for logging
  * \param state     pointer to `connection::state`
  * \param new_state new state
  */
-static void change_state(size_t slot, atomic_int *state, int new_state) {
+static void change_state(size_t slot, struct connection *conn, atomic_int *state, int new_state) {
     char old[512], new[512];
-    LOG(
+    LOG_CONN(
         LOG_DEBUG,
-        "slot=%zu state: %s => %s\n",
-        slot,
+        "%s " UTF8_ARROW_EAST " %s\n",
         str_state(old, sizeof(old), atomic_load_explicit(state, memory_order_relaxed)),
         str_state(new, sizeof(new), new_state)
     );
@@ -84,6 +114,7 @@ static int epoll_mod(struct context *ctx, int fd, uint32_t events) {
 static int epoll_from_buffers(struct context *ctx, struct connection_endpoint *endpoint) {
     struct fd_info *info = fd_info_get(&ctx->fd_info, &ctx->num_fds, endpoint->fd[1]);
     assert(info);
+
     uint32_t events = 0;
     if(ACTIVE_RANGE(&endpoint->tx)->len > 0) {
         events |= EPOLLOUT;
@@ -94,23 +125,21 @@ static int epoll_from_buffers(struct context *ctx, struct connection_endpoint *e
     ) {
         events |= EPOLLIN | EPOLLRDHUP;
     }
-    char epoll[512];
-    LOG(
+
+    size_t slot = info->slot;
+    // Do not use `shared_memory_get_connection`, it could remap the shared
+    // memory and make `endpoint` an invalid pointer.
+    struct connection *conn = &ctx->map.addr->connections[slot];
+    char old[512], new[512];
+    LOG_CONN(
         LOG_DEBUG,
-        "slot=%zu epoll: fd=%d%s events=%s\n",
-        info->slot,
-        endpoint->fd[1],
-        (endpoint->shutdown & (1 << SHUT_RD)) ? " (eof)" : "",
-        epoll_str(epoll, sizeof(epoll), info->events)
-    );
-    LOG(
-        LOG_DEBUG,
-        "slot=%zu     => fd=%d%s events=%s\n",
-        info->slot,
+        "poll %d%s %s " UTF8_ARROW_EAST " %s\n",
         endpoint->fd[1],
         ACTIVE_RANGE(&endpoint->rx)->shutdown ? " (eof)" : "",
-        epoll_str(epoll, sizeof(epoll), events)
+        epoll_str(old, sizeof(old), info->events),
+        epoll_str(new, sizeof(new), events)
     );
+
     if(epoll_mod(ctx, endpoint->fd[1], events) < 0) {
         perror("epoll_ctl");
         // Only fatal if a new event cannot be added. Failure to remove an
@@ -177,7 +206,7 @@ static int swap_buffers(struct context *ctx, struct connection *conn) {
     ) {
         return -1;
     }
-    change_state(conn - ctx->map.addr->connections, &conn->state, CONN_POLL);
+    change_state(conn - ctx->map.addr->connections, conn, &conn->state, CONN_POLL);
     return 0;
 }
 #endif
@@ -194,17 +223,13 @@ static int swap_buffers(struct context *ctx, struct connection *conn) {
 static int handle_connection(struct context *ctx, int fd, uint32_t events) {
     struct fd_info *info = fd_info_get(&ctx->fd_info, &ctx->num_fds, fd);
     assert(info);
+    struct connection *conn = shared_memory_get_connection(&ctx->map, info->slot);
+    assert(conn);
+
+    const int slot = info->slot; // Required by LOG_CONN
 
     char str[512];
-    LOG(
-        LOG_DEBUG,
-        "slot=%zu handle_connection(ctx, %d, %s)\n",
-        info->slot,
-        fd,
-        epoll_str(str, sizeof(str), events)
-    );
-
-    struct connection *conn = shared_memory_get_connection(&ctx->map, info->slot);
+    LOG_CONN(LOG_DEBUG, "poll %d %s\n", fd, epoll_str(str, sizeof(str), events));
 
 #ifndef PERFORMANCE_BASELINE
     int state = atomic_load_explicit(&conn->state, memory_order_acquire);
@@ -220,7 +245,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
     } else if(fd == conn->downstream.fd[1]) {
         endpoint = &conn->downstream;
     } else {
-        LOG(LOG_ERROR, "unknown file descriptor %d\n", fd);
+        LOG_CONN(LOG_ERROR, "unknown file descriptor %d\n", fd);
         return -1;
     }
 
@@ -235,26 +260,17 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             size_t old_len = ACTIVE_RANGE(&endpoint->tx)->len;
             while(ACTIVE_RANGE(&endpoint->tx)->len > 0) {
                 rc = atomic_send(endpoint->fd[1], &endpoint->tx);
-                LOG(LOG_DEBUG, "atomic_send(%d, ...) = %d\n", endpoint->fd[1], rc);
                 if(rc < 0 && errno != EINTR) {
                     break;
                 }
                 assert(rc > 0);
             }
-            LOG(
+            LOG_CONN(
                 LOG_DEBUG,
-                "slot=%zu send:      %10s.fd[1] = %d\n",
-                info->slot,
-                endpoint == &conn->downstream ? "downstream" : "upstream",
-                endpoint->fd[1]
-            );
-            LOG(
-                LOG_DEBUG,
-                "slot=%zu            %10s.tx.len = %6zu => %6zu\n",
-                info->slot,
-                endpoint == &conn->downstream ? "downstream" : "upstream",
+                "send %s %6zu%+zd\n",
+                endpoint == &conn->downstream ? UTF8_ARROW_SOUTH : UTF8_ARROW_NORTH,
                 old_len,
-                ACTIVE_RANGE(&endpoint->tx)->len
+                ACTIVE_RANGE(&endpoint->tx)->len - old_len
             );
             if(
                 rc < 0
@@ -270,7 +286,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
                 ACTIVE_RANGE(&endpoint->tx)->shutdown
                 && ACTIVE_RANGE(&endpoint->tx)->len == 0
             ) {
-                LOG(LOG_DEBUG, "slot=%zu shutdown(%d, SHUT_WR)\n", info->slot, endpoint->fd[1]);
+                LOG_CONN(LOG_DEBUG, "shutdown(%d, SHUT_WR)\n", endpoint->fd[1]);
                 if(shutdown(endpoint->fd[1], SHUT_WR) < 0 && errno != ENOTCONN) {
                     perror("shutdown");
                     goto error;
@@ -282,30 +298,22 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             (events & (EPOLLIN | EPOLLRDHUP | EPOLLERR | EPOLLHUP))
             && !ACTIVE_RANGE(&endpoint->rx)->shutdown
         ) {
-            int rc;
             size_t old_len = ACTIVE_RANGE(&endpoint->rx)->len;
             assert(ACTIVE_RANGE(&endpoint->rx)->len < sizeof(endpoint->rx.buf));
+            int rc;
             do {
                 rc = atomic_recv(endpoint->fd[1], &endpoint->rx);
-                LOG(LOG_DEBUG, "atomic_recv(%d, ...) = %d\n", endpoint->fd[1], rc);
                 if(rc == 0 || (rc < 0 && errno != EINTR)) {
                     break;
                 }
             } while(ACTIVE_RANGE(&endpoint->rx)->len < sizeof(endpoint->rx.buf));
-            LOG(
+            LOG_CONN(
                 LOG_DEBUG,
-                "slot=%zu recv:      %10s.fd[1] = %d\n",
-                info->slot,
-                endpoint == &conn->downstream ? "downstream" : "upstream",
-                endpoint->fd[1]
-            );
-            LOG(
-                LOG_DEBUG,
-                "slot=%zu            %10s.rx.len = %6zu => %6zu\n",
-                info->slot,
-                endpoint == &conn->downstream ? "downstream" : "upstream",
+                "recv %s %6zu%+zd%s\n",
+                endpoint == &conn->upstream ? UTF8_ARROW_SOUTH : UTF8_ARROW_NORTH,
                 old_len,
-                ACTIVE_RANGE(&endpoint->rx)->len
+                ACTIVE_RANGE(&endpoint->rx)->len - old_len,
+                rc == 0 || (rc < 0 && errno == EPIPE) ? " (eof)" : ""
             );
             if(
                 rc == 0
@@ -313,7 +321,6 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
                 // so EPIPE must be handled.
                 || (rc < 0 && errno == EPIPE)
             ) {
-                LOG(LOG_DEBUG, "slot=%zu            eof=1\n", info->slot);
                 ACTIVE_RANGE(&endpoint->rx)->shutdown = -1;
                 // shutdown(SHUT_RD) can be lost, it will be redone on EPIPE.
                 if(shutdown(endpoint->fd[1], SHUT_RD) < 0 && errno != ENOTCONN) {
@@ -358,21 +365,24 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
 #undef SAVE_LOG_LEN
         // Transform from recv buffers to send buffers.
         int rc = transform(info->slot, &conn->transform_ctx, &down, &up);
-#define LOG_LEN(prefix, UP_DOWN, RX_TX) \
-    LOG( \
-        LOG_DEBUG, \
-        "slot=%zu %s %13s.len = %6zu => %6zu\n", \
-        info->slot, \
-        prefix, \
-        #UP_DOWN "." #RX_TX, \
-        UP_DOWN##_##RX_TX##_len, \
-        INACTIVE_RANGE(&conn->UP_DOWN.RX_TX)->len \
-    )
-        LOG_LEN("transform:", downstream, rx);
-        LOG_LEN("          ", upstream, tx);
-        LOG_LEN("transform:", upstream, rx);
-        LOG_LEN("          ", downstream, tx);
-#undef LOG_CHANGE
+        LOG_XFRM(
+            LOG_DEBUG,
+            UTF8_ARROW_NORTH,
+            downstream_rx_len,
+            INACTIVE_RANGE(&conn->downstream.rx)->len - downstream_rx_len,
+            upstream_tx_len,
+            INACTIVE_RANGE(&conn->upstream.tx)->len - upstream_tx_len,
+            up.shutdown
+        );
+        LOG_XFRM(
+            LOG_DEBUG,
+            UTF8_ARROW_SOUTH,
+            upstream_rx_len,
+            INACTIVE_RANGE(&conn->upstream.rx)->len - upstream_rx_len,
+            downstream_tx_len,
+            INACTIVE_RANGE(&conn->downstream.tx)->len - downstream_tx_len,
+            down.shutdown
+        );
         if(rc < 0) {
             goto error;
         }
@@ -390,7 +400,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             && INACTIVE_RANGE(&conn->upstream.tx)->len == 0
         ) {
             int r;
-            change_state(info->slot, &conn->state, CONN_CLOSING);
+            change_state(info->slot, conn, &conn->state, CONN_CLOSING);
             if(1) {
 #ifndef PERFORMANCE_BASELINE
                 __attribute__((fallthrough));
@@ -399,7 +409,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
                 r = 0;
             } else {
     error:
-                change_state(info->slot, &conn->state, CONN_ERROR);
+                change_state(info->slot, conn, &conn->state, CONN_ERROR);
 #ifndef PERFORMANCE_BASELINE
                 __attribute__((fallthrough));
     case CONN_ERROR:
@@ -415,7 +425,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             // The listener will set the connection to CONN_UNUSED.
             list_fds(LOG_DEBUG);
             FOREACH_CONNECTION_ENDPOINT(endpoint, conn) {
-                LOG(LOG_INFO, "slot=%zu close(%d)\n", info->slot, endpoint->fd[1]);
+                LOG_CONN(LOG_DEBUG, "close(%d)\n", endpoint->fd[1]);
                 if(closep(&endpoint->fd[1]) < 0) {
                     if(errno == EBADF) {
                         endpoint->fd[1] = -1;
@@ -448,6 +458,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
         // `swap_buffers`.
         change_state(
             info->slot,
+            conn,
             &conn->state,
             CONN_SWAP_BUFFERS
             | (!conn->downstream.rx.active <<  8)
@@ -466,9 +477,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
 
 #ifndef PERFORMANCE_BASELINE
     default:
-        ;
-        char str[512];
-        LOG(LOG_ERROR, "slot=%zu unsupported state: %s\n", str_state(str, sizeof(str), state));
+        LOG_CONN(LOG_ERROR, "unknown state: %s\n", str_state(str, sizeof(str), state));
         goto error;
     }
 #endif
@@ -540,7 +549,7 @@ static int ipc_connected(const char *action, size_t slot, int fd, const char *ta
         return -2;
     }
 
-    change_state(info->slot, &conn->state, CONN_POLL);
+    change_state(info->slot, conn, &conn->state, CONN_POLL);
 
     // Transform empty buffers. `events == 0` means no data is read before
     // `transform` is called.
@@ -646,7 +655,7 @@ static int ipc_accepted(const char *action, size_t slot, int fd, const char *tai
 
     conn->worker_pid = getpid();
     conn->downstream.fd[1] = fd;
-    change_state(slot, &conn->state, CONN_CONNECTING);
+    change_state(slot, conn, &conn->state, CONN_CONNECTING);
 
     if(indirect_connect(ctx, slot) < 0) {
         // Cause the worker to exit. It will be restarted by the listener and
