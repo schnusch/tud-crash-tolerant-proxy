@@ -116,9 +116,22 @@ static int epoll_from_buffers(struct context *ctx, struct connection_endpoint *e
     struct fd_info *info = fd_info_get(&ctx->fd_info, &ctx->num_fds, endpoint->fd[1]);
     assert(info);
 
+    size_t slot = info->slot;
+    // Do not use `shared_memory_get_connection`, it could remap the shared
+    // memory and make `endpoint` an invalid pointer.
+    struct connection *conn = &ctx->map.addr->connections[slot];
+
     uint32_t events = 0;
     if(ACTIVE_RANGE(&endpoint->tx)->len > 0) {
         events |= EPOLLOUT;
+    } else if(ACTIVE_RANGE(&endpoint->tx)->shutdown) {
+        // Send buffer is drained and SHUT_WR was indicated by transform.
+        // TODO only once
+        LOG_CONN(LOG_DEBUG, "shutdown(%d, SHUT_WR)\n", endpoint->fd[1]);
+        if(shutdown(endpoint->fd[1], SHUT_WR) < 0 && errno != ENOTCONN) {
+            perror("shutdown");
+            return -1;
+        }
     }
     if(
         ACTIVE_RANGE(&endpoint->rx)->len < sizeof(endpoint->rx.buf)
@@ -127,10 +140,6 @@ static int epoll_from_buffers(struct context *ctx, struct connection_endpoint *e
         events |= EPOLLIN | EPOLLRDHUP;
     }
 
-    size_t slot = info->slot;
-    // Do not use `shared_memory_get_connection`, it could remap the shared
-    // memory and make `endpoint` an invalid pointer.
-    struct connection *conn = &ctx->map.addr->connections[slot];
     char old[512], new[512];
     LOG_CONN(
         LOG_DEBUG,
@@ -280,18 +289,6 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             ) {
                 perror("atomic_send");
                 goto error;
-            }
-            // Shutdown one direction of the connenction, if the send buffers
-            // are drained.
-            if(
-                ACTIVE_RANGE(&endpoint->tx)->shutdown
-                && ACTIVE_RANGE(&endpoint->tx)->len == 0
-            ) {
-                LOG_CONN(LOG_DEBUG, "shutdown(%d, SHUT_WR)\n", endpoint->fd[1]);
-                if(shutdown(endpoint->fd[1], SHUT_WR) < 0 && errno != ENOTCONN) {
-                    perror("shutdown");
-                    goto error;
-                }
             }
         }
         // Read as much data as possible.
