@@ -22,6 +22,7 @@ TEST(parse_cmdline, keeper) {
         "--num-workers=2",
         "--upstream-address=[::1]:12345",
         "--shared-memory-fd=3",
+        "--listen-fd=4",
         NULL
     };
     int argc = 0;
@@ -35,6 +36,8 @@ TEST(parse_cmdline, keeper) {
     EXPECT_STREQ(cmdline.worker, "bar");
     EXPECT_EQ(worker_process_array_len(&cmdline.worker_procs), 2);
     EXPECT_EQ(cmdline.shared_mem_fd, 3);
+    EXPECT_EQ(cmdline.num_listen_fds, 1);
+    EXPECT_EQ(cmdline.listen_fds[0], 4);
 }
 
 static void test_worker_argv(

@@ -26,8 +26,8 @@ final_ldflags := $(LDFLAGS) $(shell pkgconf --libs gtest)
 .PHONY: check clean
 
 check: main
-	$(MAKE) -C .. final_cppflags='$(final_cppflags) -DUSE_LIBCRASH' bin/worker
-	valgrind ./main
+	$(MAKE) -C .. bin/worker libcrash/nop/libcrash.so
+	LD_LIBRARY_PATH='../libcrash/nop' valgrind ./main
 
 clean:
 	$(RM) -r main *.d *.o
