@@ -55,6 +55,7 @@ jobs:
       matrix:
         attr:
         - "#default"
+        - "#libcrash.nop"
         - "#performance-baseline"
     runs-on: ubuntu-latest
     needs:

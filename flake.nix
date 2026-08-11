@@ -26,10 +26,15 @@
               valgrindWorker = useValgrind;
             };
 
+            libcrash = lib.genAttrs [ "nop" ] (
+              libcrashFlavor: self.packages.${system}.default.override { inherit libcrashFlavor; }
+            );
+
             performance-baseline = lib.pipe self.packages.${system}.default [
               (
                 pkg:
                 pkg.override (prev: {
+                  libcrashFlavor = null;
                   extraCppFlags = (prev.extraCppFlags or [ ]) ++ [
                     "-DPERFORMANCE_BASELINE"
                   ];
