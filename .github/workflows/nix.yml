@@ -96,6 +96,9 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
+    - run: |-
+        sed -e '/\buse\(Strace\|Valgrind\)\b/ s/\bfalse\b/true/g' -i flake.nix
+    - run: git --no-pager diff --color --no-exit-code
     - run: ${{ env.nix_copy_from }}
     - run: nix build -L '.?submodules=1${{ matrix.attr }}'
       timeout-minutes: 3
