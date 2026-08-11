@@ -37,6 +37,7 @@
                   libcrashFlavor = null;
                   extraCppFlags = (prev.extraCppFlags or [ ]) ++ [
                     "-DPERFORMANCE_BASELINE"
+                    ''-DUSER_AGENT="\"performance-baseline\""''
                   ];
                 })
               )
