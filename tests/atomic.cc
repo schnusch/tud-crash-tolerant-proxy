@@ -100,11 +100,17 @@ static void init_ringbuf(struct atomic_ring_buffer *buf, ssize_t start, const ch
         start = sizeof(buf->buf) - n + start;
     }
     ASSERT_LT(start, sizeof(buf->buf));
+    // Empty buffers are always filled from byte 0, regardless of their `start`.
+    // Insert the first byte manually.
+    ASSERT_GT(n, 0);
     ACTIVE_RANGE(buf)->start = start;
-    ACTIVE_RANGE(buf)->len = 0;
-    ring_buffer_append(buf->buf, ACTIVE_RANGE(buf), data, n);
+    ACTIVE_RANGE(buf)->len = 1;
+    buf->buf[ACTIVE_RANGE(buf)->start] = data[0];
+    // Append the rest of `data`.
+    ACTIVE_RANGE(buf)->len += ring_buffer_append(buf->buf, ACTIVE_RANGE(buf), data + 1, n - 1);
     ASSERT_EQ(ACTIVE_RANGE(buf)->start, start);
     ASSERT_EQ(ACTIVE_RANGE(buf)->len, n);
+    // Verify result.
     ASSERT_EQ(string_from_ringbuffer(buf, 0), std::string(data, n));
 }
 
