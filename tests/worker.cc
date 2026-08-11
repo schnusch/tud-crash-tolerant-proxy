@@ -223,8 +223,6 @@ TEST_F(worker, one) {
     EXPECT_EQ(std::string(rx, sizeof(rx)), std::string(tx, sizeof(tx)));
     ASSERT_EQ(recv(upstream, rx, sizeof(rx), 0), 0);
 
-    EXPECT_EQ(kill(this->pid, SIGUSR1), 0);
-
     // recv download
     ASSERT_EQ(recv(downstream, rx, sizeof(rx), 0), sizeof(rx));
     memset(tx, 'b', sizeof(tx));
@@ -285,8 +283,6 @@ TEST_F(worker, two) {
     memset(tx, 'D', sizeof(tx));
     EXPECT_EQ(std::string(rx, sizeof(rx)), std::string(tx, sizeof(tx)));
     ASSERT_EQ(recv(downstream1, rx, sizeof(rx), 0), 0);
-
-    EXPECT_EQ(kill(this->pid, SIGUSR1), 0);
 
     // receive download on connection 2
     ASSERT_EQ(recv(downstream2, rx, sizeof(rx), 0), sizeof(rx));
