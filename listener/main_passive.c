@@ -14,6 +14,7 @@
 #include "main_passive.h"
 #include "pidfd.h"
 #include "../common/util.h"
+#include "../libcrash/libcrash.h"
 
 static int set_oom_score_adj(int oom_adj) {
     if(oom_adj < -1000 || 1000 < oom_adj) {

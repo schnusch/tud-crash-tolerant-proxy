@@ -4,6 +4,7 @@
 
 #include "accept.h"
 #include "util.h"
+#include "../libcrash/libcrash.h"
 
 static struct connection *get_empty_connection(struct shared_memory_mapping *map) {
     for(size_t i = 0;; ++i) {
@@ -43,12 +44,13 @@ struct connection *accept_connection(struct shared_memory_mapping *map, int list
         (struct sockaddr *)&conn->downstream.addr,
         &conn->downstream.addrlen
     );
-    // TODO error hook
     if(conn_fd < 0) {
         perror("accept");
         return NULL;
     }
     assert(conn->downstream.addrlen <= sizeof(conn->downstream.addr));
+
+    LIBCRASH(accept_post(conn_fd, (struct sockaddr *)&conn->downstream.addr, conn->downstream.addrlen));
 
     // Save file descriptor.
     // Don't forget to reset `*.shutdown`.

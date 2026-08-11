@@ -1,3 +1,5 @@
+#ifdef USE_LIBCRASH
+
 #include <gtest/gtest.h>
 
 extern "C" {
@@ -602,3 +604,5 @@ TEST_F(Test_atomic_recv_rst, fail_recvmmsg) {
     char rx[4096];
     EXPECT_EQ(recv(sockpair[0], rx, sizeof(rx), MSG_DONTWAIT), 0);
 }
+
+#endif
