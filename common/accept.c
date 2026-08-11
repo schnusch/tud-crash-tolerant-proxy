@@ -26,6 +26,15 @@ struct connection *accept_connection(struct shared_memory_mapping *map, int list
             perror("shared_memory_get_or_append_connection");
             return NULL;
         }
+
+        // Initialize everything but `conn->state`. Initialization must always
+        // write the same, so no synchronization is required. Do it here so any
+        // connection with `CONN_ACCEPTING` is guaranteed to be initialized.
+        conn->worker_pid = -1;
+        memset(&conn->transform_ctx, 0, sizeof(conn->transform_ctx)); // TODO proper initialization
+        conn->downstream = (struct connection_endpoint){ .fd = { -1, -1 } };
+        conn->upstream   = (struct connection_endpoint){ .fd = { -1, -1 } };
+
         old_state = CONN_UNUSED;
     } while(
         !atomic_compare_exchange_strong_explicit(
@@ -53,10 +62,7 @@ struct connection *accept_connection(struct shared_memory_mapping *map, int list
     LIBCRASH(accept_post(conn_fd, (struct sockaddr *)&conn->downstream.addr, conn->downstream.addrlen));
 
     // Save file descriptor.
-    // Don't forget to reset `*.shutdown`.
-    conn->downstream = (struct connection_endpoint){ .fd = { conn_fd, -1 } };
-    conn->upstream   = (struct connection_endpoint){ .fd = { -1, -1 } };
-    conn->worker_pid = -1;
+    conn->downstream.fd[0] = conn_fd;
 
     return conn;
 }
