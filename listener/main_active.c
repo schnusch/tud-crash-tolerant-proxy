@@ -272,10 +272,12 @@ static int ipc_connect(const char *action, size_t slot, int fd, const char *tail
     }
     if(connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         perror("connect");
+        closep(&fd);
         goto error;
     }
     if(fd_cloexec(fd, 0) < 0) {
         perror("fcntl(F_SETFD)");
+        closep(&fd);
         goto error;
     }
 
