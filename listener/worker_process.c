@@ -21,7 +21,7 @@
 int worker_process_array_init(struct worker_process_array *arr) {
     int fd = -1;
     if(CAST(arr)->fd < 0) {
-        fd = memfd_create("worker_processes", 0);
+        fd = memfd_create("worker_processes", MFD_CLOEXEC);
         if(fd < 0) {
             return -1;
         }
