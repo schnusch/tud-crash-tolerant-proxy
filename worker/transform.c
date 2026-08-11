@@ -9,6 +9,10 @@
 
 #include "../thirdparty/picohttpparser/picohttpparser.h"
 
+#ifndef USER_AGENT
+#define USER_AGENT "crash-tolerant-proxy"
+#endif
+
 enum {
     PHR_TRUNC = -2,
     PHR_ERROR = -1,
@@ -362,6 +366,7 @@ int transform(
             req.num_headers = strip_headers(req.headers, req.num_headers);
             if(
                 replace_header(&req.headers, &req.num_headers, "Connection", "close") < 0
+                || replace_header(&req.headers, &req.num_headers, "User-Agent", USER_AGENT) < 0
                 || replace_header(&req.headers, &req.num_headers, "DNT", "1") < 0
                 || replace_header(&req.headers, &req.num_headers, "Sec-GPC", "1") < 0
             ) {
@@ -424,6 +429,7 @@ int transform(
             // Modify headers.
             if(
                 replace_header(&resp.headers, &resp.num_headers, "Connection", "close") < 0
+                || replace_header(&resp.headers, &resp.num_headers, "Server", USER_AGENT) < 0
                 || replace_header(&resp.headers, &resp.num_headers, "X-Clacks-Overhead", "GNU Terry Pratchett") < 0
             ) {
                 perror("replace_header");
