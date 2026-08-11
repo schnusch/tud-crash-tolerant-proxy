@@ -103,6 +103,8 @@ static std::pair<FileDescriptor, FileDescriptor> socketpair_inet(void) {
     return std::pair(std::move(acc), std::move(conn));
 }
 
+extern char **environ;
+
 class worker : public testing::Test {
 protected:
     std::pair<FileDescriptor, FileDescriptor> ipc = std::pair(FileDescriptor(-1), FileDescriptor(-1));
@@ -130,7 +132,7 @@ protected:
                 &file_actions,
                 NULL,
                 argv,
-                NULL
+                environ
             ),
             0
         );
