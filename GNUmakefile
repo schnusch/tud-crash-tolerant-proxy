@@ -21,9 +21,11 @@ final_cflags = $(CFLAGS) $(EXTRA_CFLAGS) -std=c99 -Werror=vla \
 	-DLISTENER_PATH='"$(PREFIX)/$(LISTENER)"' \
 	-DWORKER_PATH='"$(PREFIX)/$(WORKER)"'
 
+LIBCRASH_FLAVOR = nop
+
 # Linker flags
 # Use $(*FLAGS) to replace default flags and $(EXTRA_*FLAGS) to append.
-LDFLAGS = -Llibcrash/nop -lcrash -Wl,-rpath,'$$ORIGIN/../libcrash/nop'
+LDFLAGS = -Llibcrash/$(LIBCRASH_FLAVOR) -lcrash # -Wl,-rpath,'$$ORIGIN/../libcrash/$(LIBCRASH_FLAVOR)'
 EXTRA_LDFLAGS = #-fsanitize=address,undefined
 final_ldflags = $(LDFLAGS) $(EXTRA_LDFLAGS)
 
@@ -41,7 +43,7 @@ WORKER_OBJS = $(patsubst %.c,obj/%.o,$(WORKER_SRCS))
 
 MAKE_LIBCRASH = $(MAKE) \
 	-C libcrash \
-	CPPFLAGS='$(filter-out -DUSE_LIBBACKTRACE -DUSE_SYSTEMD,$(final_cppflags))' \
+	CPPFLAGS='$(final_cppflags)' \
 	CFLAGS='$(final_cflags)'
 
 # *.o are located in obj/, executables in bin/.
@@ -66,19 +68,19 @@ clean:
 install: bin/listener bin/worker
 	install -Dm 755 bin/listener $(DESTDIR)$(PREFIX)/$(LISTENER)
 	install -Dm 755 bin/worker $(DESTDIR)$(PREFIX)/$(WORKER)
-	install -Dm 755 libcrash/nop/libcrash.so $(DESTDIR)$(PREFIX)/lib/libcrash.so
+	install -Dm 755 libcrash/$(LIBCRASH_FLAVOR)/libcrash.so $(DESTDIR)$(PREFIX)/lib/libcrash.so
 
 bin/launcher: obj/launcher.o obj/common/util.o
 	@mkdir -p $(@D)
 	$(CC) -o $@ $^ $(filter -lbacktrace,$(final_ldflags))
 
 bin/listener: $(LISTENER_OBJS)
-	$(MAKE_LIBCRASH) nop/libcrash.so
+	$(MAKE_LIBCRASH) $(LIBCRASH_FLAVOR)/libcrash.so
 	@mkdir -p $(@D)
 	$(CC) -o $@ $(LISTENER_OBJS) $(final_ldflags)
 
 bin/worker: $(WORKER_OBJS)
-	$(MAKE_LIBCRASH) nop/libcrash.so
+	$(MAKE_LIBCRASH) $(LIBCRASH_FLAVOR)/libcrash.so
 	@mkdir -p $(@D)
 	$(CC) -o $@ $(WORKER_OBJS) $(final_ldflags)
 

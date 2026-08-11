@@ -11,6 +11,7 @@
   systemd ? null,
   valgrindWorker ? false,
   extraCppFlags ? [ ],
+  libcrashFlavor ? null,
 }:
 
 stdenv.mkDerivation {
@@ -25,12 +26,17 @@ stdenv.mkDerivation {
     ".h"
   ];
 
-  makeFlags = [ "PREFIX=${builtins.placeholder "out"}" ];
+  makeFlags = [
+    "PREFIX=${builtins.placeholder "out"}"
+  ]
+  ++ lib.optional (libcrashFlavor != null) "LIBCRASH_FLAVOR=${libcrashFlavor}";
+
   preBuild =
     let
       params = {
         EXTRA_CPPFLAGS = {
           "-DUSE_LIBBACKTRACE" = libbacktrace != null;
+          "-DUSE_LIBCRASH" = libcrashFlavor != null;
           "-DUSE_SYSTEMD" = systemd != null;
         }
         // lib.genAttrs extraCppFlags (_: true);
