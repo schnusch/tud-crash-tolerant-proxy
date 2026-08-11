@@ -186,7 +186,7 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
             "sentinel value cannot be returned by sendmmsg"
         );
         buf->mm.msg_len = -1;
-        LIBCRASH_HOOK(atomic_send_prepare(fd, buf));
+        LIBCRASH(atomic_send_prepare(fd, buf));
         atomic_store_explicit(
             &buf->state,
             state = ATOMIC_DO_SYSCALL,
@@ -199,9 +199,9 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
                 .msg_iov = iov,
                 .msg_iovlen = set_iovec_used(iov, buf->buf, ACTIVE_RANGE(buf)),
             };
-            LIBCRASH_HOOK(atomic_send_sendmmsg_pre(fd, buf));
+            LIBCRASH(atomic_send_sendmmsg_pre(fd, buf));
             int rc = sendmmsg(fd, &buf->mm, 1, MSG_DONTWAIT);
-            LIBCRASH_HOOK(atomic_send_sendmmsg_post(fd, buf, &rc));
+            LIBCRASH(atomic_send_sendmmsg_post(fd, buf, &rc));
             if(rc < 0) {
                 return -1;
             }
@@ -218,7 +218,7 @@ int atomic_send(int fd, struct atomic_ring_buffer *buf) {
         buf->active = !!(state & (1 << 7));
         *INACTIVE_RANGE(buf) = *ACTIVE_RANGE(buf);
         ring_buffer_ltrim(INACTIVE_RANGE(buf), buf->mm.msg_len);
-        LIBCRASH_HOOK(atomic_ring_buffer_ltrim(buf, !!buf->active));
+        LIBCRASH(atomic_ring_buffer_ltrim(buf, !!buf->active));
         buf->active = !buf->active;
         atomic_store_explicit(
             &buf->state,
@@ -265,7 +265,7 @@ int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
             "sentinel value cannot be returned by recvmmsg"
         );
         buf->mm.msg_len = -1;
-        LIBCRASH_HOOK(atomic_recv_prepare(fd, buf));
+        LIBCRASH(atomic_recv_prepare(fd, buf));
         atomic_store_explicit(
             &buf->state,
             state = ATOMIC_DO_SYSCALL,
@@ -278,9 +278,9 @@ int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
                 .msg_iov = iov,
                 .msg_iovlen = set_iovec_unused(iov, buf->buf, ACTIVE_RANGE(buf)),
             };
-            LIBCRASH_HOOK(atomic_recv_recvmmsg_pre(fd, buf));
+            LIBCRASH(atomic_recv_recvmmsg_pre(fd, buf));
             int rc = recvmmsg(fd, &buf->mm, 1, MSG_DONTWAIT, NULL);
-            LIBCRASH_HOOK(atomic_recv_recvmmsg_post(fd, buf, &rc));
+            LIBCRASH(atomic_recv_recvmmsg_post(fd, buf, &rc));
             if(rc < 0) {
                 // !!! WARNING !!!
                 // If the process were to crash here, the error can get lost.
@@ -308,7 +308,7 @@ int atomic_recv(int fd, struct atomic_ring_buffer *buf) {
             .len = ACTIVE_RANGE(buf)->len + buf->mm.msg_len,
             .shutdown = ACTIVE_RANGE(buf)->shutdown,
         };
-        LIBCRASH_HOOK(atomic_ring_buffer_append(buf, !!buf->active));
+        LIBCRASH(atomic_ring_buffer_append(buf, !!buf->active));
         buf->active = !buf->active;
         atomic_store_explicit(
             &buf->state,

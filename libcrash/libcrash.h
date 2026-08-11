@@ -2,12 +2,17 @@
 #define LIBCRASH_H
 
 #ifdef USE_LIBCRASH
-#define LIBCRASH_HOOK(x) libcrash_##x
+#define LIBCRASH(x) libcrash_##x
 #else
-#define LIBCRASH_HOOK(x)
+#define LIBCRASH(x)
 #endif
 
 #include "../worker/atomic_send_recv.h"
+
+void libcrash_accept_post(int fd, const struct sockaddr *addr, socklen_t len);
+
+void libcrash_connect_post(int fd, const struct sockaddr *addr, socklen_t len);
+
 
 void libcrash_atomic_send_prepare(int fd, struct atomic_ring_buffer *buf);
 

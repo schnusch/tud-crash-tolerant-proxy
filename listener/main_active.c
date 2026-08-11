@@ -17,6 +17,7 @@
 #include "../common/accept.h"
 #include "../common/ipc.h"
 #include "../common/util.h"
+#include "../libcrash/libcrash.h"
 
 /**
  * Set `SO_LINGER` on both file descriptors.
@@ -282,6 +283,11 @@ static int ipc_connect(const char *action, size_t slot, int fd, const char *tail
         perror("fcntl(F_SETFD)");
         goto error;
     }
+
+    LIBCRASH(connect_post(fd, (struct sockaddr *)&addr, sizeof(addr)));
+
+    // Only now the connection's file descriptor can be recovered. Unconnected
+    // sockets are discarded by FD_CLOEXEC.
     conn->upstream.fd[0] = fd;
 
     // Respond the connected socket.
