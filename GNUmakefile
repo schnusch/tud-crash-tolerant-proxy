@@ -9,7 +9,7 @@ WORKER = libexec/crash-tolerant-proxy-worker
 
 # Pre-processor flags
 # Use $(*FLAGS) to replace default flags and $(EXTRA_*FLAGS) to append.
-CPPFLAGS = -D_GNU_SOURCE
+CPPFLAGS = -D_GNU_SOURCE -DLIBCRASH_SIGNAL=SIGUSR2
 EXTRA_CPPFLAGS =
 final_cppflags = $(CPPFLAGS) $(EXTRA_CPPFLAGS)
 

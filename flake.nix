@@ -26,7 +26,7 @@
               valgrindWorker = useValgrind;
             };
 
-            libcrash = lib.genAttrs [ "nop" ] (
+            libcrash = lib.genAttrs [ "nop" "signal" ] (
               libcrashFlavor: self.packages.${system}.default.override { inherit libcrashFlavor; }
             );
 
