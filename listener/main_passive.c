@@ -186,7 +186,12 @@ int main_passive(int argc, char **argv) {
     sigdelset(&blocked_signals, SIGSYS);
     sigdelset(&blocked_signals, SIGTRAP);
     sigdelset(&blocked_signals, SIGVTALRM);
-
+#ifdef USE_LIBCRASH
+    sigdelset(&blocked_signals, LIBCRASH_SIGNAL);
+    if(libcrash_init(LIBCRASH_SIGNAL) < 0) {
+        return 1;
+    }
+#endif
     if(sigprocmask(SIG_SETMASK, &blocked_signals, NULL) < 0) {
         perror("sigprocmask");
         return 1;

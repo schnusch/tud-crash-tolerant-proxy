@@ -1,5 +1,10 @@
 #include "libcrash.h"
 
+int libcrash_init(int signal) {
+    (void)signal;
+    return 0;
+}
+
 void libcrash_accept_post(int fd, const struct sockaddr *addr, socklen_t len) {
     (void)fd, (void)addr, (void)len;
 }

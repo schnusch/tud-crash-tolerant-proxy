@@ -464,6 +464,12 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
     sigaddset(&mask, SIGCHLD);
     sigaddset(&mask, SIGUSR1);
     sigaddset(&mask, SIGUSR2);
+#ifdef USE_LIBCRASH
+    sigdelset(&mask, LIBCRASH_SIGNAL);
+    if(libcrash_init(LIBCRASH_SIGNAL) < 0) {
+        return 1;
+    }
+#endif
     int sigfd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
     if(sigfd < 0) {
         perror("signalfd");
