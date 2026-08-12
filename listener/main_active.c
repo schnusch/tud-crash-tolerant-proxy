@@ -234,6 +234,8 @@ static int ipc_connect(const char *action, size_t slot, int fd, const char *tail
     (void)action, (void)tail;
     struct ipc_context *ctx = ctx_;
 
+    LOG(LOG_DEBUG, "connections: %s\n", connection_status_all(ctx->map, slot));
+
     // `connect` should not receive a file descriptor.
     if(fd >= 0) {
         LOG(LOG_ERROR, "IPC connect should not received a file descriptor fd=%d\n", fd);
@@ -315,6 +317,8 @@ static int ipc_close(const char *action, size_t slot, int fd, const char *tail, 
     (void)action, (void)tail;
     struct ipc_context *ctx = ctx_;
 
+    LOG(LOG_DEBUG, "connections: %s\n", connection_status_all(ctx->map, slot));
+
     int rc = 0;
     if(fd >= 0) {
         LOG(LOG_ERROR, "IPC close should not received a file descriptor fd=%d\n", fd);
@@ -347,6 +351,8 @@ static int ipc_close(const char *action, size_t slot, int fd, const char *tail, 
 static int ipc_orphan_upstream(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
     (void)action, (void)tail;
     struct ipc_context *ctx = ctx_;
+
+    LOG(LOG_DEBUG, "connections: %s\n", connection_status_all(ctx->map, slot));
 
     // `connect` should not receive a file descriptor.
     if(fd >= 0) {
@@ -400,6 +406,7 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
         return 1;
     }
 
+    LOG(LOG_DEBUG, "connections: %s\n", connection_status_all(map, -1));
     if(
         cleanup_connections(
             &ctx.fd_info,
@@ -412,6 +419,7 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
         perror("cleanup_connections");
         return 1;
     }
+    LOG(LOG_DEBUG, "connections: %s\n", connection_status_all(map, -1));
 
     int recovered_fd = recover_one_fd(&ctx.fd_info, &ctx.num_fds);
     if(recovered_fd >= 0) {

@@ -189,7 +189,7 @@ struct connection *shared_memory_get_connection(struct shared_memory_mapping *ma
     if(shared_memory_resize(map) < 0) {
         return NULL;
     }
-    size_t current_length = (map->addr->size - offsetof(struct shared_memory, connections)) / sizeof(*map->addr->connections);
+    size_t current_length = COUNT_CONNECTIONS(map);
     if(slot >= current_length) {
         return NULL;
     }
@@ -201,7 +201,7 @@ struct connection *shared_memory_get_or_append_connection(struct shared_memory_m
     if(conn) {
         return conn;
     }
-    size_t current_length = (map->addr->size - offsetof(struct shared_memory, connections)) / sizeof(*map->addr->connections);
+    size_t current_length = COUNT_CONNECTIONS(map);
     if(
         shared_memory_append(
             map,
@@ -227,4 +227,42 @@ int shared_memory_truncate(struct shared_memory_mapping *map, size_t size) {
     }
     map->addr->size = size;
     return shared_memory_resize(map);
+}
+
+char *_connection_status_all(char *buf, struct shared_memory_mapping *map, size_t highlight) {
+    char *const end = buf + COUNT_CONNECTIONS(map);
+    char *p = buf;
+    size_t i = 0;
+    FOREACH_CONNECTION(conn, map) {
+        assert(p < end);
+        switch(atomic_load_explicit(&conn->state, memory_order_relaxed)) {
+        case CONN_UNUSED:
+            *p++ = i == highlight ? '!' : '.';
+            break;
+        case CONN_ACCEPTING:
+            *p++ = i == highlight ? 'A' : 'a';
+            break;
+        case CONN_CONNECTING:
+            *p++ = i == highlight ? 'C' : 'c';
+            break;
+        case CONN_POLL:
+            *p++ = i == highlight ? 'W' : 'w';
+            break;
+        case CONN_SWAP_BUFFERS:
+            *p++ = i == highlight ? 'B' : 'b';
+            break;
+        case CONN_CLOSING:
+            *p++ = i == highlight ? 'X' : 'x';
+            break;
+        case CONN_ERROR:
+            *p++ = i == highlight ? 'E' : 'e';
+            break;
+        default:
+            *p++ = i == highlight ? '@' : '?';
+            break;
+        }
+        ++i;
+    }
+    *p = '\0';
+    return buf;
 }

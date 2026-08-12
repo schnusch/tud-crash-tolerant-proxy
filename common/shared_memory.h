@@ -127,6 +127,15 @@ struct shared_memory_mapping {
     )
 
 /**
+ * The number of complete `struct connection` mapped in `map`.
+ */
+#define COUNT_CONNECTIONS(map) \
+    ( \
+        ((map)->length - offsetof(struct shared_memory, connections)) \
+        / sizeof(*(map)->addr->connections) \
+    )
+
+/**
  * Initialize mapping of shared memory in `fd` at `addr`. Create a new memfd
  * if `fd` less than zero.
  */
@@ -160,5 +169,8 @@ struct connection *shared_memory_get_or_append_connection(struct shared_memory_m
  * array `shared_memory_mapping::connections` `count` times.
  */
 int shared_memory_append(struct shared_memory_mapping *map, void *entry, size_t size, size_t count);
+
+#define connection_status_all(map, highlight) _connection_status_all(alloca(COUNT_CONNECTIONS(map) + 1), map, highlight)
+char *_connection_status_all(char *buf, struct shared_memory_mapping *map, size_t highlight);
 
 #endif

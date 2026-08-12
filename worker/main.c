@@ -421,7 +421,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             // will set `SO_LINGER` beforehand.
             // https://ndeepak.com/posts/2016-10-21-tcprst/
             // The listener will set the connection to CONN_UNUSED.
-            list_fds(LOG_DEBUG);
+            LOG(LOG_DEBUG, "connections: %s\n", connection_status_all(&ctx->map, slot));
             FOREACH_CONNECTION_ENDPOINT(endpoint, conn) {
                 LOG_CONN(LOG_DEBUG_BYTES, "close(%d)\n", endpoint->fd[1]);
                 if(closep(&endpoint->fd[1]) < 0) {
@@ -488,6 +488,8 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
 static int ipc_connected(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
     (void)action, (void)tail;
     struct context *ctx = ctx_;
+
+    LOG(LOG_DEBUG, "connections: %s\n", connection_status_all(&ctx->map, slot));
 
     // `connected` must be accompanied by a file descriptor.
     if(fd < 0) {
@@ -626,6 +628,8 @@ static int ipc_accepted(const char *action, size_t slot, int fd, const char *tai
     (void)action, (void)tail;
     struct context *ctx = ctx_;
 
+    LOG(LOG_DEBUG, "connections: %s\n", connection_status_all(&ctx->map, slot));
+
     // `accepted` must be accompanied by a file descriptor.
     if(fd < 0) {
         errno = EBADF;
@@ -668,6 +672,8 @@ static int ipc_close(const char *action, size_t slot, int fd, const char *tail, 
     (void)action, (void)tail;
     struct context *ctx = ctx_;
 
+    LOG(LOG_DEBUG, "connections: %s\n", connection_status_all(&ctx->map, slot));
+
     int rc = 0;
     if(fd >= 0) {
         LOG(LOG_ERROR, "IPC close should not received a file descriptor fd=%d\n", fd);
@@ -698,6 +704,8 @@ static int ipc_close(const char *action, size_t slot, int fd, const char *tail, 
 static int ipc_orphan_downstream(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
     (void)action, (void)tail;
     struct context *ctx = ctx_;
+
+    LOG(LOG_DEBUG, "connections: %s\n", connection_status_all(&ctx->map, slot));
 
     if(fd < 0) {
         errno = EBADF;
@@ -736,6 +744,8 @@ static int ipc_orphan_downstream(const char *action, size_t slot, int fd, const 
 static int ipc_orphan_upstream(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
     (void)action, (void)tail;
     struct context *ctx = ctx_;
+
+    LOG(LOG_DEBUG, "connections: %s\n", connection_status_all(&ctx->map, slot));
 
     if(fd < 0) {
         errno = EBADF;
