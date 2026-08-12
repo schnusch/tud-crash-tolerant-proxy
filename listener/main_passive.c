@@ -77,6 +77,9 @@ static int kill_active(pid_t active_pid, struct worker_process_array *worker_pro
     return r;
 }
 
+/**
+ * Compare `*(int *)a` and `*(int *)b`.
+ */
 static int compare_ints(const void *a, const void *b) {
     return *(const int *)a - *(const int *)b;
 }
@@ -99,14 +102,11 @@ int main_passive(int argc, char **argv) {
     }
 
     // Prepare all listen_fds.
-    if(ensure_stdio_no_listen(&cmdline) < 0) {
-        return 1;
-    }
-    if(add_systemd_listen_fds(&cmdline, 1) < 0) {
-        perror("add_systemd_listen_fds");
-        return 1;
-    }
-    if(bind_listen_addrs(&cmdline) < 0) {
+    if(
+        ensure_stdio_no_listen(&cmdline) < 0
+        || add_systemd_listen_fds(&cmdline, 1) < 0
+        || bind_listen_addrs(&cmdline) < 0
+    ) {
         return 1;
     }
     qsort(cmdline.listen_fds, cmdline.num_listen_fds, sizeof(*cmdline.listen_fds), compare_ints);
@@ -165,10 +165,6 @@ int main_passive(int argc, char **argv) {
     ctx.pidfd = pidfd_open(getpid(), 0);
     if(ctx.pidfd < 0) {
         perror("pidfd_open");
-        return 1;
-    }
-    if(fd_cloexec(ctx.pidfd, 0) < 0) {
-        perror("fcntl(F_SETFD)");
         return 1;
     }
     // FD_CLOEXEC is set by pidfd_open.

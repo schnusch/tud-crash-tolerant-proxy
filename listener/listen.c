@@ -72,6 +72,7 @@ int add_systemd_listen_fds(struct cmdline_opts *cmdline, int unset) {
     int new_listen_fds = sd_listen_fds(unset);
     if(new_listen_fds < 0) {
         errno = new_listen_fds;
+        perror("sd_listen_fds");
         return -1;
     } else if(new_listen_fds == 0) {
         return 0;
@@ -82,6 +83,7 @@ int add_systemd_listen_fds(struct cmdline_opts *cmdline, int unset) {
         (cmdline->num_listen_fds + new_listen_fds) * sizeof(*listen_fds)
     );
     if(!listen_fds) {
+        perror("realloc");
         return -1;
     }
     cmdline->listen_fds = listen_fds;
@@ -93,12 +95,14 @@ int add_systemd_listen_fds(struct cmdline_opts *cmdline, int unset) {
         int is_socket = sd_is_socket(listen_fd, AF_UNSPEC, SOCK_STREAM, 1);
         if(is_socket < 0) {
             errno = -is_socket;
+            perror("sd_is_socket");
             r = -1;
         } else if(is_socket) {
             // sd_listen_fds sets FD_CLOEXEC, but the worker process needs to
             // inherit them.
             // https://github.com/systemd/systemd/blob/v214/src/libsystemd/sd-daemon/sd-daemon.c#L75
             if(fd_cloexec(listen_fd, 0) < 0) {
+                perror("fcntl(F_SETFD)");
                 r = -1;
             }
             cmdline->listen_fds[dst++] = listen_fd;
