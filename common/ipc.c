@@ -103,11 +103,8 @@ static int extract_one_fd(struct msghdr *msg) {
             memcpy(&received_fd, CMSG_DATA(cmsg), sizeof(received_fd));
             ++num_received;
             if(fd < 0) {
-                if(fd_cloexec(received_fd, 0) < 0) {
-                    perror("fcntl");
-                }
                 fd = received_fd;
-            } else if(close(received_fd) >= 0) {
+            } else if(closep(&received_fd) == 0) {
                 ++num_closed;
             }
         }
@@ -125,13 +122,8 @@ int ipc_process_incoming(
 ) {
     int received_fd = -1;
     while(1) {
-        if(received_fd >= 0 && close(received_fd) < 0) {
+        if(closep(&received_fd) < 0) {
             perror("close");
-            if(fd_cloexec(received_fd, 1) < 0) {
-                perror("fcntl");
-                // TODO fatal? The received_fd will be forgotten but inherited
-                // across exec(2).
-            }
         }
 
         char buf[IPC_MAXSIZE + 1];
