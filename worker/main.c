@@ -434,6 +434,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             }
 #ifdef PERFORMANCE_BASELINE
             // Do not exit on connection error.
+            atomic_store_explicit(&conn->state, CONN_UNUSED, memory_order_relaxed);
             return 0;
 #else
             if(ipc_send(ctx->ipc_fd, "close", info->slot, -1, NULL) < 0) {
