@@ -7,6 +7,7 @@
 
 #include <assert.h>
 #include <arpa/inet.h>
+#include <errno.h> // perror: strerror(errno)
 #include <limits.h>
 #include <stddef.h>
 #include <string.h>
