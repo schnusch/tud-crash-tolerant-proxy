@@ -264,6 +264,14 @@ error:
         perror("close");
         goto error;
     }
+    LOG(
+        LOG_DEBUG,
+        "new  worker_process[%zu] = { .ipc_fd = %d, .pid_fd = %d, .pid = %d }\n",
+        i,
+        proc->ipc_fd,
+        proc->pid_fd,
+        (int)proc->pid
+    );
     return child;
 }
 
