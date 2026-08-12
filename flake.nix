@@ -88,7 +88,7 @@
                   upstream="''${upstream%% *}"
                   exec "$@" -l 0.0.0.0:80 --upstream-address="''${upstream:?}:80"
                 ''
-                "--"
+                "-"
               ]
               ++ lib.optionals useStrace [
                 (lib.getExe pkgs.strace)
