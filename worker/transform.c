@@ -56,7 +56,7 @@ struct http_response {
         } \
         while(1) { \
             int ret = CALL; \
-            LOG(LOG_DEBUG, "%s = %d\n", #CALL, ret); \
+            LOG(LOG_DEBUG_HTTP, "%s = %d\n", #CALL, ret); \
             if(ret == PHR_TRUNC) { \
                 return 0; \
             } else if(ret == PHR_ERROR) { \
@@ -316,26 +316,28 @@ static int eval_parse_result(
     const char *msg,
     size_t slot
 ) {
+#define JSON(maxlen) json_strndupa(linear, direction->in_range->len < (maxlen) ? direction->in_range->len : (maxlen))
     if(consumed == 0) {
         if(direction->in_range->len == RING_BUFFER_SIZE) {
             LOG(LOG_ERROR, "slot=%zu HTTP %s headers do not fit in the receive buffer\n", slot, msg);
             return -1;
         } else if(direction->eof) {
-            LOG(LOG_INFO, "slot=%zu truncated HTTP %s\n", slot, msg);
+            LOG(LOG_ERROR, "slot=%zu truncated HTTP %s\n", slot, msg);
             return -1;
         } else if(!looks_like(linear, direction->in_range->len)) {
-            LOG(LOG_INFO, "slot=%zu does not look like a HTTP %s\n", slot, msg);
+            LOG(LOG_ERROR, "slot=%zu does not look like a HTTP %s: %s\n", slot, msg, JSON(64));
             return -1;
         } else {
-            LOG(LOG_DEBUG, "slot=%zu incomplete HTTP %s\n", slot, msg);
+            LOG(LOG_DEBUG_HTTP, "slot=%zu incomplete HTTP %s\n", slot, msg);
             return 1;
         }
     } else if(consumed < 0) {
-        LOG(LOG_INFO, "slot=%zu cannot parse HTTP %s\n", slot, msg);
+        LOG(LOG_ERROR, "slot=%zu cannot parse HTTP %s: %s\n", slot, msg, JSON(64));
         return -1;
     } else {
         return 0;
     }
+#undef JSON
 }
 
 int transform(
@@ -386,8 +388,8 @@ int transform(
                 if(produced < 0) {
                     LOG(LOG_ERROR, "slot=%zu HTTP request does not fit in the send buffer\n", slot);
                 } else {
-                    LOG(LOG_DEBUG, "slot=%zu received HTTP request:     %s\n", slot, json_strndupa(linear, consumed));
-                    LOG(LOG_DEBUG, "slot=%zu transformed HTTP request:  %s\n", slot, json_strndupa(up->out_buf, produced));
+                    LOG(LOG_DEBUG_HTTP, "slot=%zu received HTTP request:     %s\n", slot, json_strndupa(linear, consumed));
+                    LOG(LOG_DEBUG_HTTP, "slot=%zu transformed HTTP request:  %s\n", slot, json_strndupa(up->out_buf, produced));
                     // Advance buffers.
                     up->in_range->start = (up->in_range->start + consumed) % RING_BUFFER_SIZE;
                     up->in_range->len -= consumed;
@@ -399,7 +401,7 @@ int transform(
             }
             __attribute__((fallthrough));
         case -1:
-            LOG(LOG_INFO, "slot=%zu forwarding upstream traffic verbatim\n", slot);
+            LOG(LOG_DEBUG_HTTP, "slot=%zu forwarding upstream traffic verbatim\n", slot);
             state |= HTTP_GOT_REQUEST;
             __attribute__((fallthrough));
         default:
@@ -448,8 +450,8 @@ int transform(
                 if(produced < 0) {
                     LOG(LOG_ERROR, "slot=%zu HTTP response does not fit in the send buffer\n", slot);
                 } else {
-                    LOG(LOG_DEBUG, "slot=%zu received HTTP response:    %s\n", slot, json_strndupa(linear, consumed));
-                    LOG(LOG_DEBUG, "slot=%zu transformed HTTP response: %s\n", slot, json_strndupa(down->out_buf, produced));
+                    LOG(LOG_DEBUG_HTTP, "slot=%zu received HTTP response:    %s\n", slot, json_strndupa(linear, consumed));
+                    LOG(LOG_DEBUG_HTTP, "slot=%zu transformed HTTP response: %s\n", slot, json_strndupa(down->out_buf, produced));
                     // Advance buffers.
                     down->in_range->start = (down->in_range->start + consumed) % RING_BUFFER_SIZE;
                     down->in_range->len -= consumed;

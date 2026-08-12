@@ -163,7 +163,7 @@ int ipc_process_incoming(
         received_fd = extract_one_fd(&msg);
 
         // Parse message.
-        LOG(LOG_DEBUG, "received IPC message (fd=%d): %s\n", received_fd, buf);
+        LOG(LOG_DEBUG_IPC, "received IPC message (fd=%d): %s\n", received_fd, buf);
         ssize_t action_len = -1;
         size_t slot = -1;
         ssize_t consumed = -1;
