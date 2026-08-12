@@ -121,10 +121,10 @@ void init_log_level(void) {
         int e;
         log_level = strtol_limit(&e, level, INT_MIN, INT_MAX);
         if(e) {
-            log_level = DEFAULT_LOG_LEVEL;
+            log_level = LOG_BACKTRACE - 1;
             perror("strtol");
         }
-        log_level &= ~1;
+        log_level &= LOG_BACKTRACE - 1;
     }
 
 #ifdef USE_LIBBACKTRACE
@@ -132,7 +132,7 @@ void init_log_level(void) {
 #endif
 }
 
-void _log(int level, const char *filename, unsigned int lineno, const char *func, const char *fmt, ...) {
+void _log(unsigned int level, const char *filename, unsigned int lineno, const char *func, const char *fmt, ...) {
     int errnum = errno;
 
     int unlock = fcntl(STDERR_FILENO, F_SETLKW, &(struct flock){ .l_type = F_WRLCK }) == 0;

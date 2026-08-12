@@ -29,30 +29,31 @@ extern int log_level;
  */
 void init_log_level(void);
 
+_Static_assert(sizeof(int) == 4 && CHAR_BIT == 8, "32-bit int");
 enum {
     /** Print a backtrace before the log message. */
-    LOG_BACKTRACE = 1,
+    LOG_BACKTRACE = 1 << 31,
     /**
-     * The least significant bit controls whether a backtrace should be printed.
+     * The most significant bit controls whether a backtrace should be printed.
      * Therefore the actual log levels are multiples of two.
      */
-    LOG_ALWAYS = INT_MIN & ~LOG_BACKTRACE,
-    LOG_ERROR = -2,
-    LOG_INFO = 0,
-    LOG_DEBUG = 2,
-    LOG_DEBUG_HTTP = 4,
-    LOG_DEBUG_IPC = 6,
-    LOG_DEBUG_STATE = 8,
-    LOG_DEBUG_BYTES = 10,
+    LOG_ALWAYS = 0,
+    LOG_ERROR,
+    LOG_INFO,
+    LOG_DEBUG,
+    LOG_DEBUG_HTTP,
+    LOG_DEBUG_IPC,
+    LOG_DEBUG_STATE,
+    LOG_DEBUG_BYTES,
 };
 
 /**
  * Only call this function through `LOG`.
  */
-void _log(int level, const char *filename, unsigned int lineno, const char *func, const char *fmt, ...);
+void _log(unsigned int level, const char *filename, unsigned int lineno, const char *func, const char *fmt, ...);
 
 #define LOG(LEVEL, ...) ( \
-    ((LEVEL) & ~LOG_BACKTRACE) > log_level \
+    ((LEVEL) & (LOG_BACKTRACE - 1)) > log_level \
     ? (void)0 \
     : _log(LEVEL, __FILE__, __LINE__, __func__, __VA_ARGS__) \
 )

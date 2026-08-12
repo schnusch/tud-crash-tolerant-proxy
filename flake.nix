@@ -166,7 +166,7 @@
                     cat compose.yaml
 
                     tee proxy.env >&2 << eof
-                  LOG_LEVEL=''${LOG_LEVEL:-2147483646}
+                  LOG_LEVEL=''${LOG_LEVEL:-2147483647}
                   eof
 
                     tee benchmark.env >&2 << eof
