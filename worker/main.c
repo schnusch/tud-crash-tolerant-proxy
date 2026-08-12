@@ -525,8 +525,11 @@ static int ipc_connected(const char *action, size_t slot, int fd, const char *ta
         perror("realloc");
         return -2;
     }
-    info->type = FD_TYPE_CONN;
-    info->slot = slot;
+    *info = (struct fd_info){
+        .type = FD_TYPE_CONN,
+        .slot = slot,
+        .events = 0,
+    };
     if(epoll_mod(ctx, conn->downstream.fd[1], EPOLLIN | EPOLLRDHUP) < 0) {
         perror("epoll_ctl");
         return -2;
@@ -538,8 +541,11 @@ static int ipc_connected(const char *action, size_t slot, int fd, const char *ta
         perror("realloc");
         return -2;
     }
-    info->type = FD_TYPE_CONN;
-    info->slot = slot;
+    *info = (struct fd_info){
+        .type = FD_TYPE_CONN,
+        .slot = slot,
+        .events = 0,
+    };
     if(epoll_mod(ctx, conn->upstream.fd[1], EPOLLIN | EPOLLRDHUP) < 0) {
         perror("epoll_ctl");
         return -2;
