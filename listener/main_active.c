@@ -448,7 +448,14 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
             }
         } else {
             // Poll existing worker process.
-            LOG(LOG_INFO, "worker_process[%zu] = { .ipc_fd = %d, .pid_fd = %d, .pid = %d }\n", i, proc->ipc_fd, proc->pid_fd, proc->pid);
+            LOG(
+                LOG_INFO,
+                "poll worker_process[%zu] = { .ipc_fd = %d, .pid_fd = %d, .pid = %d }\n",
+                i,
+                proc->ipc_fd,
+                proc->pid_fd,
+                proc->pid
+            );
             if(
                 worker_process_epoll_add(
                     &ctx,
@@ -540,7 +547,7 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
         size_t slot = conn - map->addr->connections;
         LOG(
             LOG_INFO,
-            "slot=%zu distributing orphaned connection %d <=> %d (0x%X)\n",
+            "slot=%zu %d" UTF8_ARROW_EAST "%d: distributing orphaned connection (0x%X)\n",
             slot,
             conn->downstream.fd[0],
             conn->upstream.fd[0],
