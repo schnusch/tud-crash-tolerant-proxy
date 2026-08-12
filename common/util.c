@@ -291,9 +291,7 @@ int parse_sockaddr(struct sockaddr_storage *addr, const char *str_addr) {
     if(*str_addr == '[') {
         // format [::1]:12345
         struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)addr;
-        *in6 = (struct sockaddr_in6){
-            .sin6_family = AF_INET6,
-        };
+        in6->sin6_family = AF_INET6;
 
         ++str_addr;
         str_port = strchr(str_addr, ']');
