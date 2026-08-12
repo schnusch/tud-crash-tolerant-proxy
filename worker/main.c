@@ -21,9 +21,9 @@
  * Log with a common prefix identifying the current connection.
  * Required variables: `slot`, `conn`
  */
-#define LOG_CONN(level, fmt, ...) LOG( \
-    level, \
-    "slot=%zu %d" UTF8_ARROW_EAST "%d: " fmt, \
+#define LOG_CONN(LEVEL, FMT, ...) LOG( \
+    LEVEL, \
+    "slot=%zu %d" UTF8_ARROW_EAST "%d: " FMT, \
     slot, \
     conn->downstream.fd[1], \
     conn->upstream.fd[1], \
