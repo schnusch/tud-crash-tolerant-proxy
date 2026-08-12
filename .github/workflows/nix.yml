@@ -80,6 +80,8 @@ jobs:
       matrix:
         attr:
         - "#compose.ab"
+        - "#compose.cassowary"
+        - "#compose.vegeta"
         benchmark_host:
         - baseline.
         - nginx.

@@ -173,11 +173,14 @@
                   ${
                     let
                       defaults = {
+                        BENCHMARK_CSV = "result.csv";
                         BENCHMARK_TSV = "result.tsv";
+                        BENCHMARK_JSON = "result.json";
                         BENCHMARK_HOST = "proxy.";
                         BENCHMARK_FILE = "1M";
                         BENCHMARK_REQUESTS = "100";
                         BENCHMARK_PARALLEL = "10";
+                        BENCHMARK_DURATION = "60";
                       };
                     in
                     lib.concatStringsSep "\n" (
