@@ -291,7 +291,9 @@ int parse_sockaddr(struct sockaddr_storage *addr, const char *str_addr) {
     if(*str_addr == '[') {
         // format [::1]:12345
         struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)addr;
-        in6->sin6_family = AF_INET6;
+        *in6 = (struct sockaddr_in6){
+            .sin6_family = AF_INET6,
+        };
 
         ++str_addr;
         str_port = strchr(str_addr, ']');
@@ -307,7 +309,9 @@ int parse_sockaddr(struct sockaddr_storage *addr, const char *str_addr) {
     } else {
         // format 127.0.0.1:12345
         struct sockaddr_in *in4 = (struct sockaddr_in *)addr;
-        in4->sin_family = AF_INET;
+        *in4 = (struct sockaddr_in){
+            .sin_family = AF_INET,
+        };
 
         str_port = strchr(str_addr, ':');
         if(!str_port) {
