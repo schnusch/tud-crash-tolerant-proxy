@@ -122,6 +122,7 @@ struct atomic_ring_buffer {
 /**
  * Append `size` bytes from `tail` to `buf`. If there are less than `size` free
  * bytes in `buf`, `tail` is only copied partially.
+ * \return the number of bytes appended
  */
 size_t ring_buffer_append(
     char buf[RING_BUFFER_SIZE],
