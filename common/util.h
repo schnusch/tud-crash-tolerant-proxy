@@ -142,7 +142,9 @@ char *json_strdup(const char *str);
 static inline char *_json_strndupa(char *dst, const char *src, size_t len) {
     size_t size = json_bufsize(src, len);
     size_t n = json_strlcpy(dst, size, src, len);
-    assert(n < size);
+    if(n >= size) {
+        LOG(LOG_ALWAYS | LOG_BACKTRACE, "overflow: %zu >= %zu\n", n, size);
+    }
     return dst;
 }
 
