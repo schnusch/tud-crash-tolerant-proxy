@@ -78,6 +78,83 @@ static int kill_active(pid_t active_pid, struct worker_process_array *worker_pro
 }
 
 /**
+ * Convert poll bitmask to their string constants.
+ */
+static char *poll_str(char *buf, size_t size, short events) {
+    static const struct str_bit bits[] = {
+#define POLL_STR(x) { .num = x, .str = #x }
+        POLL_STR(POLLIN),
+        POLL_STR(POLLPRI),
+        POLL_STR(POLLOUT),
+        POLL_STR(POLLRDHUP),
+        POLL_STR(POLLERR),
+        POLL_STR(POLLHUP),
+        POLL_STR(POLLNVAL),
+#undef POLL_STR
+        {0, NULL}
+    };
+    return str_bits(bits, buf, size, events);
+}
+
+/**
+ * Wait for all workers to terminate.
+ */
+void wait_workers(struct worker_process_array *worker_procs) {
+    LOG(LOG_INFO, "waiting for worker processes to terminate...\n");
+    list_fds(LOG_INFO);
+
+    size_t num_fds = worker_process_array_len(worker_procs);
+    struct pollfd *running = alloca(num_fds * sizeof(*running));
+    size_t dst = 0;
+    for(size_t i = 0; i < num_fds; ++i) {
+        struct worker_process *proc = worker_process_array_get(worker_procs, i);
+        assert(proc);
+        if(proc->pid_fd < 0) {
+            continue;
+        }
+        running[dst++] = (struct pollfd){
+            .fd = proc->pid_fd,
+            .events = POLLIN,
+        };
+        char str[512];
+        LOG(
+            LOG_DEBUG,
+            "running[%d] = { .fd = %d, .events = %s }\n",
+            i,
+            running[i].fd,
+            poll_str(str, sizeof(str), running[i].events)
+        );
+    }
+    num_fds = dst;
+
+    while(num_fds > 0) {
+        LOG(LOG_DEBUG, "poll(..., %zu, -1)\n", num_fds);
+        int ready;
+        EINTR_RETRY(ready, poll(running, num_fds, -1));
+        if(ready < 0) {
+            perror("poll");
+            break;
+        }
+        // Poll sorts ready file descriptors to the front. Whatever the `revent`
+        // ignore ready file descriptors and continue to poll the others.
+        for(size_t i = 0; i < (size_t)ready; ++i) {
+            char str[512];
+            LOG(
+                LOG_DEBUG,
+                "running[%d] = { .fd = %d, .revents = %s }\n",
+                i,
+                running[i].fd,
+                poll_str(str, sizeof(str), running[i].revents)
+            );
+        }
+        running += ready;
+        num_fds -= ready;
+    }
+
+    LOG(LOG_INFO, "all worker processes terminated\n");
+}
+
+/**
  * Compare `*(int *)a` and `*(int *)b`.
  */
 static int compare_ints(const void *a, const void *b) {
@@ -287,6 +364,7 @@ int main_passive(int argc, char **argv) {
             }
         }
         // Active listener process terminated.
+        wait_workers(&cmdline.worker_procs);
 
         if(action == SIGNAL_SHUTDOWN) {
             // Exit.
