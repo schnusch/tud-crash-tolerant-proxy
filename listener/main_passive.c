@@ -82,6 +82,8 @@ static int compare_ints(const void *a, const void *b) {
 }
 
 int main_passive(int argc, char **argv) {
+    init_log_level();
+
     __attribute__((cleanup(free_cmdline)))
     struct cmdline_opts cmdline = {
         .listen_fds = NULL,
