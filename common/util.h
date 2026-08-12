@@ -36,10 +36,14 @@ enum {
      * The least significant bit controls whether a backtrace should be printed.
      * Therefore the actual log levels are multiples of two.
      */
-    LOG_ALWAYS = INT_MIN & ~1,
+    LOG_ALWAYS = INT_MIN & ~LOG_BACKTRACE,
     LOG_ERROR = -2,
     LOG_INFO = 0,
     LOG_DEBUG = 2,
+    LOG_DEBUG_HTTP = 4,
+    LOG_DEBUG_IPC = 6,
+    LOG_DEBUG_STATE = 8,
+    LOG_DEBUG_BYTES = 10,
 };
 
 /**

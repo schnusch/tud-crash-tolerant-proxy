@@ -57,7 +57,7 @@
 static void change_state(size_t slot, struct connection *conn, atomic_int *state, int new_state) {
     char old[512], new[512];
     LOG_CONN(
-        LOG_DEBUG,
+        LOG_DEBUG_STATE,
         "%s " UTF8_ARROW_EAST " %s\n",
         str_state(old, sizeof(old), atomic_load_explicit(state, memory_order_relaxed)),
         str_state(new, sizeof(new), new_state)
@@ -142,7 +142,7 @@ static int epoll_from_buffers(struct context *ctx, struct connection_endpoint *e
 
     char old[512], new[512];
     LOG_CONN(
-        LOG_DEBUG,
+        LOG_DEBUG_BYTES,
         "poll %d%s %s " UTF8_ARROW_EAST " %s\n",
         endpoint->fd[1],
         ACTIVE_RANGE(&endpoint->rx)->shutdown ? " (eof)" : "",
@@ -239,7 +239,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
     const int slot = info->slot; // Required by LOG_CONN
 
     char str[512];
-    LOG_CONN(LOG_DEBUG, "poll %d %s\n", fd, epoll_str(str, sizeof(str), events));
+    LOG_CONN(LOG_DEBUG_BYTES, "poll %d %s\n", fd, epoll_str(str, sizeof(str), events));
 
 #ifndef PERFORMANCE_BASELINE
     int state = atomic_load_explicit(&conn->state, memory_order_acquire);
@@ -276,7 +276,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
                 assert(rc > 0);
             }
             LOG_CONN(
-                LOG_DEBUG,
+                LOG_DEBUG_BYTES,
                 "send %s %6zu%+zd\n",
                 endpoint == &conn->downstream ? UTF8_ARROW_SOUTH : UTF8_ARROW_NORTH,
                 old_len,
@@ -306,7 +306,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
                 }
             } while(ACTIVE_RANGE(&endpoint->rx)->len < sizeof(endpoint->rx.buf));
             LOG_CONN(
-                LOG_DEBUG,
+                LOG_DEBUG_BYTES,
                 "recv %s %6zu%+zd%s\n",
                 endpoint == &conn->upstream ? UTF8_ARROW_SOUTH : UTF8_ARROW_NORTH,
                 old_len,
@@ -364,7 +364,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
         // Transform from recv buffers to send buffers.
         int rc = transform(info->slot, &conn->transform_ctx, &down, &up);
         LOG_XFRM(
-            LOG_DEBUG,
+            LOG_DEBUG_BYTES,
             UTF8_ARROW_NORTH,
             downstream_rx_len,
             INACTIVE_RANGE(&conn->downstream.rx)->len - downstream_rx_len,
@@ -373,7 +373,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             up.shutdown
         );
         LOG_XFRM(
-            LOG_DEBUG,
+            LOG_DEBUG_BYTES,
             UTF8_ARROW_SOUTH,
             upstream_rx_len,
             INACTIVE_RANGE(&conn->upstream.rx)->len - upstream_rx_len,
@@ -423,7 +423,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             // The listener will set the connection to CONN_UNUSED.
             list_fds(LOG_DEBUG);
             FOREACH_CONNECTION_ENDPOINT(endpoint, conn) {
-                LOG_CONN(LOG_DEBUG, "close(%d)\n", endpoint->fd[1]);
+                LOG_CONN(LOG_DEBUG_BYTES, "close(%d)\n", endpoint->fd[1]);
                 if(closep(&endpoint->fd[1]) < 0) {
                     if(errno == EBADF) {
                         endpoint->fd[1] = -1;
