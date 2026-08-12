@@ -228,7 +228,9 @@ size_t strlcpy(char *dst, const char *src, size_t size) {
         // strncpy null-terminated the string
         return end - dst;
     }
-    end[-1] = '\0';
+    if(end > dst) {
+        end[-1] = '\0';
+    }
     // `src` is at least `end - dst` bytes long, no need to run strlen on that
     // part again.
     size_t len = end - dst;
