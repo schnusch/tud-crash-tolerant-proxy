@@ -53,8 +53,6 @@ int ipc_send(int ipc_fd, const char *action, size_t slot, int fd, const char *fm
     struct msghdr msg = {
         .msg_iov = &io,
         .msg_iovlen = 1,
-        .msg_control = NULL,
-        .msg_controllen = 0,
     };
 
     // Send file descriptor.
@@ -160,7 +158,7 @@ int ipc_process_incoming(
             // EOF, other end disconnected.
             errno = ECONNRESET; // FIXME
             return -1;
-        } else if(n == sizeof(buf)) {
+        } else if((size_t)n >= sizeof(buf)) {
             // Message might be truncated, ignore.
             LOG(LOG_ERROR, "ignoring potentially truncated IPC message: %.*s\n", (int)n, buf);
             continue; // Poor-man's tail recursion.
@@ -182,7 +180,7 @@ int ipc_process_incoming(
             LOG(LOG_ERROR, "ignoring unparseable IPC message: %s\n", buf);
             continue; // Poor-man's tail recursion.
         } else if(action_len < 0 || consumed < 0) {
-            errno = ENOTSUP;
+            errno = EINVAL;
             return -1;
         }
 
@@ -199,12 +197,14 @@ int ipc_process_incoming(
         // NUL-terminate the message's action.
         buf[action_len] = '\0';
 
+        // Find matching IPC method.
         const struct ipc_action_method *m = methods;
         for(; m->action; ++m) {
             if(strcmp(m->action, buf) == 0) {
                 break;
             }
         }
+        // Call IPC method.
         if(m->method) {
             int rc = m->method(buf, slot, received_fd, tail, ctx);
             received_fd = -1;
@@ -213,8 +213,12 @@ int ipc_process_incoming(
             }
         } else if(m->action) {
             // .action was not NULL but .method was NULL
+            buf[action_len] = ' ';
+            LOG(LOG_INFO, "ignoring unknown IPC message, method is NULL: %s\n", buf);
         } else {
             // No matching method found, no fallback method.
+            buf[action_len] = ' ';
+            LOG(LOG_INFO, "ignoring unknown IPC message: %s\n", buf);
         }
 
         continue; // Poor-man's tail recursion.
