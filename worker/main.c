@@ -486,7 +486,6 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
 static int ipc_connected(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
     (void)action, (void)tail;
     struct context *ctx = ctx_;
-    struct connection *conn = shared_memory_get_connection(&ctx->map, slot);
 
     // `connected` must be accompanied by a file descriptor.
     if(fd < 0) {
@@ -504,6 +503,9 @@ static int ipc_connected(const char *action, size_t slot, int fd, const char *ta
     if(fd_cloexec(fd, 0) < 0) {
         perror("fcntl(F_SETFD)");
     }
+
+    struct connection *conn = shared_memory_get_connection(&ctx->map, slot);
+    assert(conn);
 
     conn->downstream.rx = ATOMIC_RING_BUFFER_INIT;
     conn->downstream.tx = ATOMIC_RING_BUFFER_INIT;
@@ -621,13 +623,6 @@ static int indirect_connect(struct context *ctx, size_t slot) {
 static int ipc_accepted(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
     (void)action, (void)tail;
     struct context *ctx = ctx_;
-    struct connection *conn = shared_memory_get_or_append_connection(&ctx->map, slot);
-    if(!conn) {
-        // `slot` does not exist in the shared memory and the shared memory
-        // cannot be extended. Exit the worker.
-        perror("pwritev");
-        return -2;
-    }
 
     // `accepted` must be accompanied by a file descriptor.
     if(fd < 0) {
@@ -648,6 +643,9 @@ static int ipc_accepted(const char *action, size_t slot, int fd, const char *tai
     if(fd_cloexec(fd, 0) < 0) {
         perror("fcntl(F_SETFD)");
     }
+
+    struct connection *conn = shared_memory_get_or_append_connection(&ctx->map, slot);
+    assert(conn);
 
     conn->worker_pid = getpid();
     conn->downstream.fd[1] = fd;
@@ -698,8 +696,6 @@ static int ipc_close(const char *action, size_t slot, int fd, const char *tail, 
 static int ipc_orphan_downstream(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
     (void)action, (void)tail;
     struct context *ctx = ctx_;
-    struct connection *conn = shared_memory_get_or_append_connection(&ctx->map, slot);
-    assert(conn);
 
     if(fd < 0) {
         errno = EBADF;
@@ -719,6 +715,9 @@ static int ipc_orphan_downstream(const char *action, size_t slot, int fd, const 
     if(fd_cloexec(fd, 0) < 0) {
         perror("fcntl(F_SETFD)");
     }
+
+    struct connection *conn = shared_memory_get_or_append_connection(&ctx->map, slot);
+    assert(conn);
 
     conn->worker_pid = getpid();
     conn->downstream.fd[1] = fd;
@@ -735,8 +734,6 @@ static int ipc_orphan_downstream(const char *action, size_t slot, int fd, const 
 static int ipc_orphan_upstream(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
     (void)action, (void)tail;
     struct context *ctx = ctx_;
-    struct connection *conn = shared_memory_get_or_append_connection(&ctx->map, slot);
-    assert(conn);
 
     if(fd < 0) {
         errno = EBADF;
@@ -756,6 +753,9 @@ static int ipc_orphan_upstream(const char *action, size_t slot, int fd, const ch
     if(fd_cloexec(fd, 0) < 0) {
         perror("fcntl(F_SETFD)");
     }
+
+    struct connection *conn = shared_memory_get_or_append_connection(&ctx->map, slot);
+    assert(conn);
 
     conn->worker_pid = getpid();
     conn->upstream.fd[1] = fd;
