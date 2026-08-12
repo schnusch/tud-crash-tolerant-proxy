@@ -381,6 +381,21 @@ static const struct ipc_action_method ipc_methods[] = {
     {NULL, NULL},
 };
 
+void cleanup_worker_process(struct worker_process *proc, struct shared_memory_mapping *map) {
+    // Close PID file descriptor of the reaped worker process.
+    // (Note the binary OR.)
+    if((closep(&proc->ipc_fd) | closep(&proc->pid_fd)) < 0) {
+        perror("close");
+    }
+    // Orphan the worker's connections.
+    FOREACH_CONNECTION(conn, map) {
+        if(conn->worker_pid == proc->pid) {
+            conn->worker_pid = -1;
+        }
+    }
+    proc->pid = -1;
+}
+
 int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map, int parent_pidfd) {
     // Move the listener and its workers to a separate process group.
     if(setpgid(0, 0) < 0) {
@@ -639,11 +654,22 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
                     // TODO become passive
                 } else if(evs[i].events & EPOLLHUP) {
                     // Worker process was reaped.
-                    LOG(LOG_ALWAYS, "worker process terminated\n");
-                    // TODO restart
-                }
-                if(close(evs[i].data.fd) < 0) {
-                    perror("close");
+                    LOG(LOG_ALWAYS, "worker process terminated, restarting...\n");
+                    struct worker_process *proc = worker_process_array_get(&cmdline->worker_procs, info->slot);
+                    assert(proc);
+                    LOG(
+                        LOG_INFO,
+                        "term worker_process[%zu] = { .ipc_fd = %d, .pid_fd = %d, .pid = %d }\n",
+                        info->slot,
+                        proc->ipc_fd,
+                        proc->pid_fd,
+                        proc->pid
+                    );
+                    cleanup_worker_process(proc, map);
+
+                    // TODO start new worker process and pass orphaned
+                    // connections to it.
+                    return 1;
                 }
                 break;
             case FD_TYPE_SIGNAL:
@@ -666,8 +692,8 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
                         list_fds(LOG_ALWAYS);
                         break;
                     case SIGCHLD:
-                        // Reap worker processes. Worker processes are restarted
-                        // on EPOLLHUP of the PID file descriptor.
+                        // Reap worker processes. Worker processes are removed
+                        // from the list on EPOLLHUP of their PID FDs.
                         while(1) {
                             pid_t child;
                             int wstatus;
