@@ -474,7 +474,14 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
     // currently registered to epoll.
 
     // Poll passive parent process.
-    if(worker_process_epoll_add(&ctx, parent_pidfd, EPOLLIN, &(struct fd_info){ .type = FD_TYPE_PID, .slot = -1 }) < 0) {
+    if(
+        worker_process_epoll_add(
+            &ctx,
+            parent_pidfd,
+            EPOLLIN,
+            &(struct fd_info){ .type = FD_TYPE_PID, .slot = -1 }
+        ) < 0
+    ) {
         return 1;
     }
 
@@ -499,13 +506,27 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
         perror("sigprocmask");
         return 1;
     }
-    if(worker_process_epoll_add(&ctx, sigfd, EPOLLIN, &(struct fd_info){ .type = FD_TYPE_SIGNAL, .slot = -1 }) < 0) {
+    if(
+        worker_process_epoll_add(
+            &ctx,
+            sigfd,
+            EPOLLIN,
+            &(struct fd_info){ .type = FD_TYPE_SIGNAL, .slot = -1 }
+        ) < 0
+    ) {
         return 1;
     }
 
     // Poll listening file descriptors.
     for(size_t i = 0; i < cmdline->num_listen_fds; ++i) {
-        if(worker_process_epoll_add(&ctx, cmdline->listen_fds[i], EPOLLIN, &(struct fd_info){ .type = FD_TYPE_LISTEN, .slot = -1 }) < 0) {
+        if(
+            worker_process_epoll_add(
+                &ctx,
+                cmdline->listen_fds[i],
+                EPOLLIN,
+                &(struct fd_info){ .type = FD_TYPE_LISTEN, .slot = -1 }
+            ) < 0
+        ) {
             return 1;
         }
     }
