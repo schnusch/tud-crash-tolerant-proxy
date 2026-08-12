@@ -233,8 +233,6 @@ struct ipc_context {
 static int ipc_connect(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
     (void)action, (void)tail;
     struct ipc_context *ctx = ctx_;
-    struct connection *conn = shared_memory_get_connection(ctx->map, slot);
-    assert(conn);
 
     // `connect` should not receive a file descriptor.
     if(fd >= 0) {
@@ -243,6 +241,9 @@ static int ipc_connect(const char *action, size_t slot, int fd, const char *tail
             perror("close");
         }
     }
+
+    struct connection *conn = shared_memory_get_connection(ctx->map, slot);
+    assert(conn);
 
     // Parse upstream address.
     if(!tail || strncmp(tail, "addr=", 5) != 0) {
@@ -313,6 +314,16 @@ error:
 static int ipc_close(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
     (void)action, (void)tail;
     struct ipc_context *ctx = ctx_;
+
+    int rc = 0;
+    if(fd >= 0) {
+        LOG(LOG_ERROR, "IPC close should not received a file descriptor fd=%d\n", fd);
+        if(closep(&fd) < 0) {
+            perror("close");
+        }
+        rc = -2;
+    }
+
     struct connection *conn = shared_memory_get_connection(ctx->map, slot);
     assert(conn);
 
@@ -327,7 +338,7 @@ static int ipc_close(const char *action, size_t slot, int fd, const char *tail, 
 
     atomic_store_explicit(&conn->state, CONN_UNUSED, memory_order_release);
 
-    return 0;
+    return rc;
 }
 
 /**
@@ -336,8 +347,6 @@ static int ipc_close(const char *action, size_t slot, int fd, const char *tail, 
 static int ipc_orphan_upstream(const char *action, size_t slot, int fd, const char *tail, void *ctx_) {
     (void)action, (void)tail;
     struct ipc_context *ctx = ctx_;
-    struct connection *conn = shared_memory_get_connection(ctx->map, slot);
-    assert(conn);
 
     // `connect` should not receive a file descriptor.
     if(fd >= 0) {
@@ -346,6 +355,9 @@ static int ipc_orphan_upstream(const char *action, size_t slot, int fd, const ch
             perror("close");
         }
     }
+
+    struct connection *conn = shared_memory_get_connection(ctx->map, slot);
+    assert(conn);
 
     // Respond the connected socket.
     if(ipc_send(ctx->ipc_fd, "orphan_up", slot, conn->upstream.fd[0], NULL) < 0) {
