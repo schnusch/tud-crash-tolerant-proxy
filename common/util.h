@@ -52,6 +52,10 @@ enum {
  */
 void _log(unsigned int level, const char *filename, unsigned int lineno, const char *func, const char *fmt, ...);
 
+/**
+ * Logging macro. If `LEVEL` is greater than the current global `log_level`
+ * this is a no-op and none of the arguments are evaluated.
+ */
 #define LOG(LEVEL, ...) ( \
     ((LEVEL) & ((unsigned int)LOG_BACKTRACE - 1)) > log_level \
     ? (void)0 \
