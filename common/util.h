@@ -61,9 +61,17 @@ void _log(unsigned int level, const char *filename, unsigned int lineno, const c
     ? (void)0 \
     : _log(LEVEL, __FILE__, __LINE__, __func__, __VA_ARGS__) \
 )
+
+/**
+ * Override `perror` to use `LOG`.
+ */
 #define perror(s) LOG(LOG_ALWAYS | LOG_BACKTRACE, "%s: %s\n", (s), strerror(errno))
 
 #ifdef USE_LIBBACKTRACE
+/**
+ * Print the backtrace of the caller function. Skip the first `skip` stack
+ * frames.
+ */
 void print_backtrace(int skip);
 #endif
 
