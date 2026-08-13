@@ -82,6 +82,7 @@ jobs:
         - "#compose.ab"
         - "#compose.cassowary"
         - "#compose.vegeta"
+        - "#compose.wrk"
         benchmark_host:
         - baseline.
         - nginx.
