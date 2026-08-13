@@ -29,7 +29,7 @@ extern int log_level;
  */
 void init_log_level(void);
 
-_Static_assert(sizeof(int) == 4 && CHAR_BIT == 8, "32-bit int");
+_Static_assert(sizeof(int) * CHAR_BIT >= 32, "32-bit int");
 enum {
     /** Print a backtrace before the log message. */
     LOG_BACKTRACE = 1 << 31,
@@ -53,7 +53,7 @@ enum {
 void _log(unsigned int level, const char *filename, unsigned int lineno, const char *func, const char *fmt, ...);
 
 #define LOG(LEVEL, ...) ( \
-    ((LEVEL) & (LOG_BACKTRACE - 1)) > log_level \
+    ((LEVEL) & ((unsigned int)LOG_BACKTRACE - 1)) > log_level \
     ? (void)0 \
     : _log(LEVEL, __FILE__, __LINE__, __func__, __VA_ARGS__) \
 )
