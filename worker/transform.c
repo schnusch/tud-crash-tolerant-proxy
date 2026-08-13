@@ -375,7 +375,7 @@ int transform(
                 perror("replace_header");
             } else {
                 // Serialize request.
-                assert(up->out_range.len == 0);
+                assert(up->out_range->len == 0);
                 ssize_t produced = serialize_http(
                     up->out_buf,
                     RING_BUFFER_SIZE,
@@ -437,7 +437,7 @@ int transform(
                 perror("replace_header");
             } else {
                 // Serialize response.
-                assert(down->out_range.len == 0);
+                assert(down->out_range->len == 0);
                 ssize_t produced = serialize_http(
                     down->out_buf,
                     RING_BUFFER_SIZE,
