@@ -61,6 +61,53 @@
             ];
           };
 
+          startProxy = pkgs.writeShellScript "start-proxy.sh" ''
+            set -eu
+
+            pgid_file=""
+            upstream=""
+            while getopts 'H:' opt; do
+              case "$opt" in
+                H)
+                  upstream="$OPTARG"
+                  ;;
+                *)
+                  exit 2
+                  ;;
+              esac
+            done
+            shift $((OPTIND - 1))
+
+            PS4='$ '
+            set -x
+
+            # Resolve upstream host.
+            [ -n "$upstream" ] || exit 2
+            while ! resolved=$(${pkgs.glibc.getent}/bin/getent hosts "$upstream"); do
+              ${lib.getExe' pkgs.coreutils "sleep"} .1
+            done
+            upstream="''${resolved%% *}"
+            unset resolved
+
+            exec ${
+              lib.escapeShellArgs (
+                lib.optionals useStrace [
+                  (lib.getExe pkgs.strace)
+                  "-f"
+                  "-e"
+                  "trace=!openat"
+                  "-e"
+                  "status=failed"
+                  "--"
+                ]
+              )
+            } "$@" -l 0.0.0.0:80 --upstream-address="$upstream:80"
+          '';
+
+          proxyPort = 12345;
+          baselinePort = 12346;
+          nginxPort = 12347;
+
           nginxFiles = toString (
             pkgs.runCommandLocal "zero" { } ''
               mkdir -p "$out"
@@ -69,47 +116,8 @@
               done
             ''
           );
-        in
-        proxyPkgs
-        // {
-          devShell = pkgs.callPackage ./shell.nix { };
 
           compose =
-            let
-              escapeDollarSigns = builtins.replaceStrings [ "$" ] [ "$$" ];
-              commandPrefix = [
-                # Resolve and append upstream address.
-                pkgs.runtimeShell
-                "-c"
-                ''
-                  PS4='$ '
-                  set -ex
-                  upstream=$(${pkgs.glibc.getent}/bin/getent hosts nginx.)
-                  upstream="''${upstream%% *}"
-                  exec "$@" -l 0.0.0.0:80 --upstream-address="''${upstream:?}:80"
-                ''
-                "-"
-              ]
-              ++ lib.optionals useStrace [
-                (lib.getExe pkgs.strace)
-                "-f"
-                "-e"
-                "trace=!openat"
-                "-e"
-                "status=failed"
-                "--"
-              ];
-
-              proxyPort = 12345;
-              baselinePort = 12346;
-              nginxPort = 12347;
-              proxyCommand = map escapeDollarSigns (
-                commandPrefix ++ [ (lib.getExe self.packages.${system}.default) ]
-              );
-              baselineCommand = map escapeDollarSigns (
-                commandPrefix ++ [ (lib.getExe self.packages.${system}.performance-baseline) ]
-              );
-            in
             lib.flip lib.mapAttrs (import ./benchmarks.nix { inherit lib pkgs; }) (
               _:
               {
@@ -118,16 +126,27 @@
               }:
               pkgs.replaceVarsWith {
                 src = ./compose.yaml;
-                replacements = lib.mapAttrs (_: builtins.toJSON) {
+                replacements = lib.mapAttrs (_: v: builtins.replaceStrings [ "$" ] [ "$$" ] (builtins.toJSON v)) {
+                  # Global constants.
                   inherit
-                    baselineCommand
                     baselinePort
                     nginxFiles
                     nginxPort
-                    proxyCommand
                     proxyPort
                     ;
-                  benchmarkCommand = map escapeDollarSigns [
+                  baselineCommand = [
+                    startProxy
+                    "-H${upstreamHost}"
+                    "--"
+                    (lib.getExe self.packages.${system}.performance-baseline)
+                  ];
+                  proxyCommand = [
+                    startProxy
+                    "-H${upstreamHost}"
+                    "--"
+                    (lib.getExe self.packages.${system}.libcrash.signal)
+                  ];
+                  benchmarkCommand = [
                     pkgs.runtimeShell
                     "-c"
                     (
@@ -140,6 +159,12 @@
                 };
               }
             );
+        in
+        proxyPkgs
+        // {
+          devShell = pkgs.callPackage ./shell.nix { };
+
+          inherit compose;
         }
       );
 
@@ -193,7 +218,9 @@
                   }
                   eof
 
-                    exec ${lib.getExe pkgs.podman-compose} --podman-path=${lib.getExe pkgs.podman} up --exit-code-from=benchmark
+                    ${lib.getExe pkgs.podman-compose} --podman-path=${lib.getExe pkgs.podman} up --build --exit-code-from=benchmark || e=$?
+                    ${lib.getExe pkgs.podman-compose} --podman-path=${lib.getExe pkgs.podman} down --remove-orphans
+                    exit ''${e:-0}
                   ) || e=$?
                   rm -fr "$temp"
                   exit ''${e:-0}
