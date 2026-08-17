@@ -1,7 +1,7 @@
 { lib, pkgs }:
 {
   # https://stackoverflow.com/a/34785677
-  ab = ''
+  ab.benchmarkScript = ''
     PS4='$ '
     set -x
     exec ${lib.getExe' pkgs.apacheHttpd "ab"} \
@@ -12,7 +12,7 @@
       "http://$BENCHMARK_HOST/$BENCHMARK_FILE"
   '';
 
-  cassowary = ''
+  cassowary.benchmarkScript = ''
     PS4='$ '
     set -x
     ${lib.getExe pkgs.cassowary} run \
@@ -27,7 +27,36 @@
     ${lib.getExe' pkgs.coreutils "mv"} raw.csv "/run/benchmark/$BENCHMARK_CSV"
   '';
 
-  vegeta = ''
+  first-byte = {
+    upstreamHost = "benchmark.";
+    benchmarkScript =
+      let
+        timeToFirstByte = pkgs.writeCBin "time-to-first-byte" ''
+          #include "${./tools/time-to-first-byte.c}"
+        '';
+      in
+      ''
+        PS4='$ '
+        set -x
+
+        while ! host=$(${lib.getExe' pkgs.glibc.getent "getent"} hosts "$BENCHMARK_HOST"); do
+          ${lib.getExe' pkgs.coreutils "sleep"} .1
+        done
+        host="''${host%% *}"
+
+        while ! ${lib.getExe pkgs.strace} ${lib.getExe timeToFirstByte} "$host"; do
+          ${lib.getExe' pkgs.coreutils "sleep"} .1
+        done
+
+        { echo "time,select"
+          for i in $(${lib.getExe' pkgs.coreutils "seq"} "$BENCHMARK_REQUESTS"); do
+            ${lib.getExe timeToFirstByte} "$host"
+          done
+        } | ${lib.getExe' pkgs.coreutils "tee"} "/run/benchmark/$BENCHMARK_CSV"
+      '';
+  };
+
+  vegeta.benchmarkScript = ''
     PS4='$ '
     set -x
     ${lib.getExe pkgs.vegeta} attack \
@@ -47,7 +76,7 @@
     } | ${lib.getExe pkgs.xan} drop response_body,response_headers > "/run/benchmark/$BENCHMARK_CSV"
   '';
 
-  wrk = ''
+  wrk.benchmarkScript = ''
     PS4='$ '
     set -x
     exec ${lib.getExe pkgs.wrk} \

@@ -111,7 +111,11 @@
               );
             in
             lib.flip lib.mapAttrs (import ./benchmarks.nix { inherit lib pkgs; }) (
-              _: benchmarkScript:
+              _:
+              {
+                benchmarkScript,
+                upstreamHost ? "nginx.",
+              }:
               pkgs.replaceVarsWith {
                 src = ./compose.yaml;
                 replacements = lib.mapAttrs (_: builtins.toJSON) {

@@ -81,6 +81,7 @@ jobs:
         attr:
         - "#compose.ab"
         - "#compose.cassowary"
+        - "#compose.first-byte"
         - "#compose.vegeta"
         - "#compose.wrk"
         benchmark_host:
