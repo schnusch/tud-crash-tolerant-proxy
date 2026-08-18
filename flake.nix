@@ -144,48 +144,63 @@
             ''
           );
 
+          # Generate a compose file per benchmark and transformation.
           compose =
-            lib.flip lib.mapAttrs (import ./benchmarks.nix { inherit lib pkgs; }) (
-              _:
+            lib.flip lib.mapAttrs
               {
-                benchmarkScript,
-                upstreamHost ? "nginx.",
-              }:
-              pkgs.replaceVarsWith {
-                src = ./compose.yaml;
-                replacements = lib.mapAttrs (_: v: builtins.replaceStrings [ "$" ] [ "$$" ] (builtins.toJSON v)) {
-                  # Global constants.
-                  inherit
-                    baselinePort
-                    nginxFiles
-                    nginxPort
-                    proxyPort
-                    ;
-                  baselineCommand = [
-                    startProxy
-                    "-H${upstreamHost}"
-                    "--"
-                    (lib.getExe self.packages.${system}.performance-baseline)
-                  ];
-                  proxyCommand = [
-                    startProxy
-                    "-H${upstreamHost}"
-                    "--"
-                    (lib.getExe self.packages.${system}.libcrash.signal)
-                  ];
-                  benchmarkCommand = [
-                    pkgs.runtimeShell
-                    "-c"
-                    (
-                      ''
-                        set -euo pipefail
-                      ''
-                      + benchmarkScript
-                    )
-                  ];
-                };
+                # Per transformation package override.
+                transform_headers = { };
               }
-            );
+              (
+                name: override:
+                let
+                  baselinePackage = self.packages.${system}.performance-baseline.override override;
+                  proxyPackage = self.packages.${system}.libcrash.signal.override override;
+                in
+                lib.flip lib.mapAttrs (import ./benchmarks.nix { inherit lib pkgs; }) (
+                  _:
+                  {
+                    benchmarkScript,
+                    upstreamHost ? "nginx.",
+                  }:
+                  pkgs.replaceVarsWith {
+                    src = ./compose.yaml;
+                    replacements = lib.mapAttrs (_: v: builtins.replaceStrings [ "$" ] [ "$$" ] (builtins.toJSON v)) {
+                      # Global constants.
+                      inherit
+                        baselinePort
+                        nginxFiles
+                        nginxPort
+                        proxyPort
+                        ;
+                      # Vary by flavor and benchmark.
+                      baselineCommand = [
+                        startProxy
+                        "-H${upstreamHost}"
+                        "--"
+                        (lib.getExe baselinePackage)
+                      ];
+                      proxyCommand = [
+                        startProxy
+                        "-H${upstreamHost}"
+                        "-g/run/proxy.pgid"
+                        "--"
+                        (lib.getExe proxyPackage)
+                      ];
+                      benchmarkCommand = [
+                        pkgs.runtimeShell
+                        "-c"
+                        (
+                          ''
+                            set -euo pipefail
+                          ''
+                          + benchmarkScript
+                        )
+                      ];
+                    };
+                  }
+                )
+              );
         in
         proxyPkgs
         // {
