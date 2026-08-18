@@ -16,6 +16,21 @@
 
       useStrace = false;
       useValgrind = false;
+
+      findPaths =
+        term:
+        let
+          findPaths' =
+            path: set:
+            if (term set) then
+              [ path ]
+            else
+              lib.concatLists (lib.mapAttrsToList (name: findPaths' (path ++ [ name ])) set);
+        in
+        findPaths' [ ];
+
+      findPackages = findPaths lib.isDerivation;
+      findApps = findPaths (set: (set.type or "") == "app");
     in
     {
       packages = forAllSystemsWithPkgs (
@@ -210,6 +225,21 @@
           devShell = pkgs.callPackage ./shell.nix { };
 
           inherit compose;
+
+          compose_all = pkgs.runCommandLocal "compose" { } (
+            lib.concatMapStrings (
+              path:
+              let
+                dir = lib.concatStringsSep "/" path;
+              in
+              ''
+                mkdir -p "$out"/${lib.escapeShellArg dir}
+                ln -s ${
+                  lib.attrByPath path "/dev/null" self.packages.${system}.compose
+                } "$out"/${lib.escapeShellArg dir}/compose.yaml
+              ''
+            ) (findPackages self.packages.${system}.compose)
+          );
         }
       );
 
@@ -217,7 +247,28 @@
 
       apps = forAllSystemsWithPkgs (
         system: pkgs: {
-          default = self.apps.${system}.compose.ab;
+          # The default app just lists all packages and apps of the flake.
+          default = {
+            type = "app";
+            program = toString (
+              let
+                packages = findPackages self.packages.${system};
+                apps = findApps self.apps.${system};
+                toNixCommand =
+                  subCommand: path:
+                  "  nix ${subCommand} -L ${lib.escapeShellArg ".?submodules=1#${lib.concatStringsSep "." path}"}";
+              in
+              pkgs.writeScript "help" ''
+                #!${lib.getExe' pkgs.coreutils "tail"} +2
+                Available packages:
+                ${lib.concatMapStringsSep "\n" (toNixCommand "build") packages}
+
+                Available apps:
+                ${lib.concatMapStringsSep "\n" (toNixCommand "run") apps}
+              ''
+            );
+          };
+
           compose = lib.flip lib.mapAttrs self.packages.${system}.compose (
             _: compose: {
               type = "app";
