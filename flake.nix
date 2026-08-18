@@ -61,13 +61,34 @@
             ];
           };
 
+          newpgrp = lib.getExe (
+            pkgs.writeCBin "newpgrp" ''
+              #include <errno.h>
+              #include <stdio.h>
+              #include <unistd.h>
+              int main(int argc, char **argv) {
+                  if(argc <= 1) {
+                      errno = EINVAL;
+                  } else if(setpgid(0, 0) == 0) {
+                      fprintf(stderr, ">>> pgid: %d\n", (int)getpgid(0));
+                      execvp(argv[1], argv + 1);
+                  }
+                  perror(argv[0]);
+                  return 1;
+              }
+            ''
+          );
+
           startProxy = pkgs.writeShellScript "start-proxy.sh" ''
             set -eu
 
             pgid_file=""
             upstream=""
-            while getopts 'H:' opt; do
+            while getopts 'g:H:' opt; do
               case "$opt" in
+                g)
+                  pgid_file="$OPTARG"
+                  ;;
                 H)
                   upstream="$OPTARG"
                   ;;
@@ -89,9 +110,15 @@
             upstream="''${resolved%% *}"
             unset resolved
 
+            # Save process group ID to $pgid_file.
+            [ -z "$pgid_file" ] || ${lib.getExe' pkgs.coreutils "tee"} "$pgid_file" > /dev/null << eof
+            -$$
+            eof
+
             exec ${
               lib.escapeShellArgs (
-                lib.optionals useStrace [
+                [ newpgrp ]
+                ++ lib.optionals useStrace [
                   (lib.getExe pkgs.strace)
                   "-f"
                   "-e"
