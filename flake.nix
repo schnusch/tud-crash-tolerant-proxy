@@ -150,6 +150,9 @@
               {
                 # Per transformation package override.
                 transform_headers = { };
+                transform_nop = prev: {
+                  extraCppFlags = (prev.extraCppFlags or [ ]) ++ [ "-DNOP_TRANSFORM" ];
+                };
               }
               (
                 name: override:

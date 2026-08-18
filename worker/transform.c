@@ -354,8 +354,12 @@ int transform(
     ctx->copies[!ctx->active] = ctx->copies[!!ctx->active];
 #endif
 
-    int state = ctx->copies[!ctx->active].state;
     char buf[RING_BUFFER_SIZE];
+#ifdef NOP_TRANSFORM
+    int state = HTTP_GOT_REQUEST | HTTP_GOT_RESPONSE;
+#else
+    int state = ctx->copies[!ctx->active].state;
+#endif
 
     if(!(state & HTTP_GOT_REQUEST)) {
         // Parse request.
@@ -484,6 +488,5 @@ int transform(
     }
 
     ctx->copies[!ctx->active].state = state;
-
     return 0;
 }

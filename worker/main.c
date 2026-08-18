@@ -551,6 +551,7 @@ static int ipc_connected(const char *action, size_t slot, int fd, const char *ta
 
     change_state(info->slot, conn, &conn->state, CONN_POLL);
 
+#ifndef NOP_TRANSFORM
     // Transform empty buffers. `events == 0` means no data is read before
     // `transform` is called.
     if(handle_connection(ctx, conn->downstream.fd[1], 0) < 0) {
@@ -559,6 +560,7 @@ static int ipc_connected(const char *action, size_t slot, int fd, const char *ta
         // the connection.
         return -2;
     }
+#endif
 
     return 0;
 }
