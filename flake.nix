@@ -269,67 +269,83 @@
             );
           };
 
-          compose = lib.flip lib.mapAttrs self.packages.${system}.compose (
-            _: compose: {
-              type = "app";
-              program = toString (
-                pkgs.writeShellScript "run" ''
-                  if [ $# -gt 1 ]; then
-                    echo "Usage: $0 [target_host]" >&2
-                    exit 2
-                  fi
-
-                  PS4='$ '
-                  set -ex
-                  temp=$(mktemp -d)
-                  (
-                    mkdir -p benchmark
-                    ln -rs benchmark "$temp/"
-                    cd "$temp"
-                    mkdir empty
-                    ln -s ${compose} compose.yaml
-                    cat compose.yaml
-
-                    tee proxy.env >&2 << eof
-                  LOG_LEVEL=''${LOG_LEVEL:-2147483647}
-                  eof
-
-                    tee benchmark.env >&2 << eof
-                  ${
-                    let
-                      defaults = {
-                        BENCHMARK_CSV = "result.csv";
-                        BENCHMARK_TSV = "result.tsv";
-                        BENCHMARK_JSON = "result.json";
-                        BENCHMARK_HOST = "proxy.";
-                        BENCHMARK_FILE = "1M";
-                        BENCHMARK_REQUESTS = "100";
-                        BENCHMARK_PARALLEL = "10";
-                        BENCHMARK_DURATION = "60";
-                      };
-                    in
-                    lib.concatStringsSep "\n" (
-                      lib.mapAttrsToList (k: v: "${k}=\${${k}-${lib.escapeShellArg v}}") defaults
-                    )
-                  }
-                  eof
-
-                    ${lib.getExe pkgs.podman-compose} --podman-path=${lib.getExe pkgs.podman} up --build --exit-code-from=benchmark || e=$?
-                    ${lib.getExe pkgs.podman-compose} --podman-path=${lib.getExe pkgs.podman} down --remove-orphans
-                    exit ''${e:-0}
-                  ) || e=$?
-                  rm -fr "$temp"
-                  exit ''${e:-0}
-                ''
-              );
-            }
-          );
           ci = {
             doxygen = {
               type = "app";
               program = lib.getExe pkgs.doxygen;
             };
           };
+
+          # Run podman-compose with the packaged compose files.
+          compose =
+            let
+              toApp =
+                set:
+                if !lib.isDerivation set then
+                  lib.mapAttrs (_: toApp) set
+                else
+                  let
+                    compose_yaml = set;
+                  in
+                  {
+                    type = "app";
+                    program = toString (
+                      pkgs.writeShellScript "run" ''
+                        PS4='$ '
+                        set -eux
+
+                        export PATH=${
+                          lib.makeBinPath [
+                            pkgs.coreutils
+                            pkgs.podman
+                            pkgs.podman-compose
+                          ]
+                        }"''${PATH:+:}''${PATH:-}"
+
+                        temp=$(mktemp -d)
+                        (
+                          mkdir -p benchmark
+                          ln -rs benchmark "$temp/"
+                          cd "$temp"
+                          mkdir empty
+                          ln -s ${compose_yaml} compose.yaml
+                          cat compose.yaml
+
+                          tee proxy.env >&2 << eof
+                        LOG_LEVEL=''${LOG_LEVEL:-2147483647}
+                        eof
+
+                          tee benchmark.env >&2 << eof
+                        ${
+                          let
+                            defaults = {
+                              BENCHMARK_CSV = "result.csv";
+                              BENCHMARK_TSV = "result.tsv";
+                              BENCHMARK_JSON = "result.json";
+                              BENCHMARK_HOST = "proxy.";
+                              BENCHMARK_FILE = "1M";
+                              BENCHMARK_REQUESTS = "100";
+                              BENCHMARK_PARALLEL = "10";
+                              BENCHMARK_DURATION = "60";
+                            };
+                          in
+                          lib.concatStringsSep "\n" (
+                            lib.mapAttrsToList (k: v: "${k}=\${${k}-${lib.escapeShellArg v}}") defaults
+                          )
+                        }
+                        eof
+
+                          podman-compose up --build --exit-code-from=benchmark || e=$?
+                          podman-compose down --remove-orphans
+                          exit ''${e:-0}
+                        ) || e=$?
+                        rm -fr "$temp"
+                        exit ''${e:-0}
+                      ''
+                    );
+                  };
+            in
+            toApp self.packages.${system}.compose;
         }
       );
 
