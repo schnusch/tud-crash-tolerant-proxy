@@ -7,8 +7,8 @@ TEX_ONLY_SRCS = \
 	head.tex \
 	cd-hack.tex \
 	declarations.tex \
-	tikz/head.tex
-TIKZ_SRCS = $(filter-out tikz/head.tex,$(wildcard tikz/*.tex))
+	tikz/include/head.tex
+TIKZ_SRCS = $(wildcard tikz/*.tex)
 TIKZ_SVGS = $(patsubst %.tex,out/$(NAME)/%.svg,$(TIKZ_SRCS))
 PDF_ATTACHMENTS = \
 	tmp/tex/$(NAME)-html.tar.gz \
@@ -79,13 +79,18 @@ out/$(NAME)/tikz/%.svg: tmp/html/tikz/%.xdv
 tmp/html/tikz/%.xdv: tmp/html/tikz/%.tex
 	latexmk -g -xdv -output-directory=$(@D) -jobname=$(@F:.xdv=) $< < /dev/null
 
-tmp/html/tikz/%.tex: tikz/%.tex tikz/head.tex noto.tex
+tmp/html/tikz/%.tex: tikz/%.tex tikz/include/head.tex noto.tex
+	ls -dhlp $^
 	@mkdir -p $(@D)
 	{ echo '\def\pgfsysdriver{pgfsys-dvips.def}'; \
 	  echo '\documentclass[11pt,tikz]{standalone}'; \
-	  cat tikz/head.tex noto.tex; \
+	  cat noto.tex tikz/include/head.tex; \
 	  echo '\begin{document}'; \
 	  cat $<; \
 	  echo '\end{document}'; \
 	} > $@.tmp
 	mv $@.tmp $@
+
+# podman-compose
+
+tmp/tex/$(NAME).pdf $(patsubst %,tmp/html/%,$(wildcard tikz/veth*.tex)): tikz/include/veth.tex
