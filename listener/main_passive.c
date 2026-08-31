@@ -284,7 +284,15 @@ int main_passive(int argc, char **argv) {
             perror("clone");
             return 1;
         } else if(active_pid == 0) {
-            _exit(start_listener(&ctx));
+            int rc = start_listener(&ctx);
+            if(rc < 0) {
+                // Child process becomes passive listener.
+                if(set_oom_score_adj(-1000) < 0) {
+                    perror("set_oom_score_adj");
+                }
+                continue;
+            }
+            _exit(rc);
         }
         LOG(LOG_ALWAYS, "active listener process %d started\n", (int)active_pid);
 

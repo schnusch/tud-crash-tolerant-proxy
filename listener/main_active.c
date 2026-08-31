@@ -655,8 +655,23 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
             case FD_TYPE_PID:
                 if(info->slot == (size_t)-1) {
                     // Parent passive process died.
-                    LOG(LOG_ALWAYS, "passive listener terminated\n");
-                    // TODO become passive
+                    LOG(LOG_ALWAYS, "passive listener terminated, becoming passive...\n");
+                    char **argv = cmdline_to_listener_argv(cmdline);
+                    if(argv) {
+                        list_fds(LOG_INFO);
+                        execvp(argv[0], argv);
+                        free(argv);
+                    }
+                    LOG(
+                        LOG_ERROR,
+                        "cannot exec %s continuing with old executable: %s\n",
+                        cmdline->listener,
+                        strerror(errno)
+                    );
+                    // TODO free resources
+                    // Become the new passive listener, this is handled by
+                    // `main_passive`.
+                    return -1;
                 } else if(evs[i].events & EPOLLHUP) {
                     // Worker process was reaped.
                     LOG(LOG_ALWAYS, "worker process terminated, restarting...\n");
