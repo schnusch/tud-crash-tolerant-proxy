@@ -60,6 +60,9 @@ services:
     - *tmp
     - *nix_store
     init: true
+    stop_signal: SIGKILL
+    environment:
+      PATH: @proxyPath@
     command: @proxyCommand@
     env_file:
     - ./proxy.env

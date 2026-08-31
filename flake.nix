@@ -207,12 +207,15 @@
                         "--"
                         (lib.getExe baselinePackage)
                       ];
+                      proxyPath = "${proxyPackage}/bin";
                       proxyCommand = [
                         startProxy
                         "-H${upstreamHost}"
                         "-g/run/proxy.pgid"
+                      ]
+                      ++ [
                         "--"
-                        (lib.getExe proxyPackage)
+                        "crash-tolerant-proxy"
                       ];
                       benchmarkCommand = [
                         pkgs.runtimeShell
