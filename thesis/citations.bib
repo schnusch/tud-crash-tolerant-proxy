@@ -1,9 +1,98 @@
+@inproceedings{ansel2009dmtcp,
+    author = {Jason Ansel and Kapil Arya and Gene Cooperman},
+    title = {{DMTCP}: Transparent Checkpointing for Cluster Computations and the Desktop},
+    year = {2009},
+    url = {https://dmtcp.sourceforge.io/papers/dmtcp.pdf},
+}
+
+@inproceedings{clark2005live,
+    author = {Christopher Clark and Keir Fraser and Steven Hand and Jacob Gorm Hansen and Eric Jul and Christian Limpach and Ian Pratt and Andrew Warfield},
+    title = {Live Migration of Virtual Machines},
+    booktitle = {Proceedings of the 2nd Symposium on Networked Systems Design and Implementation (NSDI '05)},
+    year = {2005},
+    month = may,
+    publisher = {USENIX Association},
+    address = {Boston, MA},
+    url = {https://www.usenix.org/legacy/publications/library/proceedings/nsdi05/tech/full_papers/clark/clark.pdf},
+}
+
+@inproceedings{laadan2010linuxcr,
+    author = {Oren Laadan and Serge E. Hallyn},
+    title = {Linux-CR: Transparent Application Checkpoint-Restart in Linux},
+    booktitle = {Proceedings of the Linux Symposium},
+    year = {2010},
+    month = jul,
+    address = {Ottawa, Canada},
+    url = {https://www.cs.columbia.edu/~orenl/papers/ols2010-linuxcr.pdf},
+}
+
+@inproceedings{mirkin2008containers,
+    author = {Andrey Mirkin and Alexey Kuznetsov and Kir Kolyshkin},
+    title = {Containers Checkpointing and Live Migration},
+    booktitle = {Proceedings of the Linux Symposium},
+    volume = {2},
+    pages = {85--90},
+    year = {2008},
+    month = jul,
+    address = {Ottawa, Ontario, Canada},
+    url = {https://landley.net/kdocs/ols/2008/ols2008v2-pages-85-90.pdf}
+}
+
+@techreport{rfc8446,
+    author      = {Eric Rescorla},
+    title       = {{The Transport Layer Security (TLS) Protocol Version 1.3}},
+    institution = {RFC Editor},
+    type        = {RFC},
+    number      = {8446},
+    year        = {2018},
+    month       = aug,
+    doi         = {10.17487/RFC8446},
+    url         = {https://www.rfc-editor.org/rfc/rfc8446},
+}
+
+@techreport{rfc9112,
+    author      = {Fielding, Roy T. and Nottingham, Mark and Reschke, Julian},
+    title       = {{HTTP/1.1}},
+    institution = {Internet Engineering Task Force},
+    type        = {RFC},
+    number      = {9112},
+    year        = {2022},
+    month       = jun,
+    doi         = {10.17487/RFC9112},
+    url         = {https://www.rfc-editor.org/rfc/rfc9112.html}
+}
+
+% software
+
 @software{anubis,
     title = {anubis},
     author = {Xe Iaso and others},
     version = {1.25.0},
     date = {2026-02-18},
     url = {https://github.com/TecharoHQ/anubis},
+}
+
+@online{criu,
+    author = {{CRIU}},
+    title = {CRIU: Checkpoint/Restore In Userspace},
+    url = {https://criu.org/},
+    urldate = {2026-08-27},
+}
+
+@misc{systemd_fdstore,
+    title = {systemd v219 NEWS},
+    author = {{systemd Project}},
+    date = {2015-02-16},
+    howpublished = {\url{https://github.com/systemd/systemd/blob/v219/NEWS}},
+    note = {Release notes for systemd v219},
+}
+
+@software{go-away,
+    title = {go-away},
+    author = {WeebDataHoarder},
+    version = {0.7.0},
+    date = {2025-05-03},
+    url = {https://git.gammaspectra.live/git/go-away},
 }
 
 @software{linux,
@@ -13,12 +102,13 @@
     url = {https://www.kernel.org/},
 }
 
-@software{go-away,
-    title = {go-away},
-    author = {WeebDataHoarder},
-    version = {0.7.0},
-    date = {2025-05-03},
-    url = {https://git.gammaspectra.live/git/go-away},
+@software{oom_kill,
+    title = {Linux Kernel},
+    author = {Linus Torvalds and others},
+    organization = {Linux Kernel Organization},
+    version = {7.2},
+    date = {2026-08-16},
+    url = {https://github.com/torvalds/linux/blob/v7.2/mm/oom_kill.c#L912-L992},
 }
 
 % man pages
@@ -57,4 +147,15 @@
     version = {6.18},
     date = {2026-02-10},
     url = {https://man7.org/linux/man-pages/man7/signal.7.html},
+}
+
+% posix
+
+@standard{posix,
+    title = {The Open Group Base Specifications Issue 8},
+    number = {IEEE Std 1003.1-2024},
+    year = {2024},
+    organization = {IEEE and The Open Group},
+    copyright = {2001--2024},
+    url = {https://pubs.opengroup.org/onlinepubs/9799919799/},
 }

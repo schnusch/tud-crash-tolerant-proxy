@@ -1,36 +1,39 @@
 # Introduction
 
-A proxy server or service (short *proxy*) is a service that forward network traffic.
-It listens for incoming connections from clients and creates outgoing connections to servers on behalf of those clients.
+Proxies are a common part of computer networks.
+They are an intermediary between hosts and forward network traffic.
+Clients connect to the proxy, the proxy evaluates the connection and forwards it to another host.
+Proxies can be connected to multiple separate networks an allow access accross networks.
 
-Usually a proxy operates on OSI Transport Layer/layer 4 and above and forwards TCP traffic verbatim or implement a higher level protocol such as HTTP.
-As such a proxy is in the position to inspect or transform the traffic passing through it.
-This allows the proxy to perform tasks such as
+![A proxy forwarding connections from clients to database servers on a separate network](tikz/proxy-network.tex)
 
- 1. encryption,
+Since connections pass through the proxy, it puts them in a central role, that allows them to inspect or transform traffic.
+With full control over the connection proxies can perform tasks such as
+
+ 1. logging,
  1. content-filtering,
+ 1. network separation,
+ 1. encryption [@rfc8446],
  1. abuse prevention [@anubis; @go-away],
  1. re-routing of connections, or
  1. load-balancing.
 
-Additionally the host the proxy is running on may be connected to multiple separate networks and may allow the users access across networks.
-
-In a database environment a proxy may be used to perform
+Some of the common functionality of the hosts can be offloaded to the proxy itself, which can lead to an overall simpler architecture.
+In a database environment a proxy may be used to additionally provide any of the following tasks or take them over from the database servers:
 
  1. authorization,
  1. load-balancing between multiple database servers,
  1. separate the databases server's network, or
  1. transform a client queries or a server responses altogether.
 
-![A proxy forwarding connections from clients to database servers on a separate network](tikz/proxy-network.tex)
+But in any case the the central role of the proxy puts it in a critical position.
+Any interruptions to the proxy will interrupt all connections passing through it as well.
+If its operations are impacted, it may become impossible for adjacent services to function.
 
-Database connections especially can be rather long-lived and computationally expensive to perform.
-In any case the proxy becomes a single point of failure.
-If it is interrupted, connections passing through it will be interrupted as well.
-If its service is impacted, it may become impossible for adjacent services to function.
-
-In a high-availability environment any downtime of central services may become unacceptable.
-Therefore a proxy service in a critical role must be designed and operated with special care.
+In high-availability environments any downtime of such a central services may become unacceptable.
+E.g. database connections can be rather long-lived, computationally expensive to perform, and impractical to retry.
+Therefore a proxy in a critical role must be designed and operated with special care.
+Strategies must be developed to protect or gracefully recover from any interruptions of the proxy.
 
 ## Problem description
 
@@ -46,7 +49,7 @@ They can stem from
  1. from the proxy itself.
 
 Severity of their impact may vary and some of these interruptions, such as critical hardware failures or disasters, cannot be handled in the scope of the proxy service at all.
-But recovery from less impactful interruptions is feasible and may become necessary.
+But recovery from less impactful interruptions is feasible and will become necessary.
 This may encompass prepared migration during an upgrade, careful design around operating system interfaces, or redundancy in the proxy itself.
 
 ## Objective

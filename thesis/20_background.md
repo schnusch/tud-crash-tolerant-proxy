@@ -22,7 +22,7 @@ This can be due to
  1. retries taking an unreasonable amount of time,
  1. a programming error that deterministically leads to an invalid state,
  1. unimplemented or permanently unavailable system features, or
- 1. faults in the underlying system itself **TODO**.
+ 1. faults in the underlying system itself.
 
 In all other cases strategies need to be developed to handle or work around the fault.
 Short running software processes can just terminate if they encounter an unexpected or unrecoverable error.
@@ -123,21 +123,20 @@ Checkpoints may differ in the strategy used to create them as well as their exte
 
 ### Checkpointing Strategy
 
-If an application is about to terminate it can create a checkpoint *reactively*, so it can be restored later.
+If an application is about to terminate it can create a checkpoint reactively, so it can be restored later.
 This could potentially happen in a signal handler.
 Using this strategy checkpoint can be created right before a process terminates, where no other changes to the state are possible and the checkpoint will contain the very latest state of the process.
 
 But as explained above is not always possible to react to a fault and create a checkpoint
-Therefore it may become necessary to create checkpoints *proactively*.
+Therefore it may become necessary to create checkpoints proactively.
 Proactive checkpoints can be triggered by arbitrary conditions, such a periodic timer or an incoming connection.
 In any case all state changes accrued since the last checkpoint will be lost if a process terminates.
 
-Database systems and filesystems employ a *write-ahead log* (short *WAL*) or *journal* to minimize the window since the last chekpoint.
-Any operations to the central data structure are instead written to the *WAL* or *journal*.
-On recovery the operations can then be replayed from the *WAL* or *journal*.
-Therefore each entry in the *WAL* or *journal* together with previous entries becomes its own checkpoints.
-
-**TODO** Ideally *continuous*.
+Database systems and filesystems take another approach, they first record all operations on the central data structure in a *write-ahead log* (short *WAL*) or *journal*.
+In case of a crash the *WAL* or *journal* can then be used to replay failed operations.
+These techniques can theoretically be used to engineer an application that keeps a continuously up-to-date checkpoint of itself.
+However this requires careful consideration during the design of all parts of the application and may not always be feasible.
+The necessary overhead might make it impractical or the interfaces required to operate in such a manner may simply be unavailable.
 
 ### Extent of Checkpoints
 
@@ -146,11 +145,12 @@ It may omit parts that are non-essential or can be easily recovered.
 E.g. in a graphical document editor only changes to the document itself must be saved, but state of the editor, such as window positions, may be discarded.
 A proxy service need not save its configuration, if it can be loaded again.
 
-Another reason to reduce the extend of the checkpoint is that the internal state itself could be corrupted in such a ways that it will deterministically lead to a fault.
-If the checkpoint is kept minimal the probabilty of corruption is reduced.
+Another reason to reduce the extend of the checkpoint is that the internal state itself grows more complicated and could become inconsistent or corrupted.
+An unfortunately corrupted state could alter the program flow such that it leads to a fault by itself.
+If the checkpoint is kept minimal the probabilty of inconsistencies or corruption is reduced.
 
 Multiple checkpoints or multiple generations of checkpoints can be kept.
-If the latest checkpoint leads to an error, an older checkpoint can be tried, which may lead to greater degradation of the service, but continued execution.
+If the latest checkpoint leads to an error an older checkpoint can be tried, which may lead to greater degradation of the service, but continued execution.
 But it can be rather difficult or may generally be impossible to determine if the checkpoint is corrupted and leads to a fault deterministically.
 
 ### Simple Proactive Checkpointing
@@ -192,20 +192,20 @@ Socket buffers are not checkpointed by `fork(2)`{.manpage}.
 :::
 
 The operating system itself may keep some associated state, that cannot be saved as easily.
-In the case of the proxy service most notably kernel buffers associated file descriptors will not be part of the checkpoints as shown in [#lost_read].
-It is however possible to completely checkpoint and restore a TCP connection.
+In the case of the proxy service most notably kernel buffers associated file descriptors will not be part of the checkpoints as shown in \autoref{lost_read}.
+However for the illustrated case advanced operating system interfaces do exists, that allow to completely checkpoint and restore a TCP connection.
 
 ## Related Work
 
 ### CRIU
 
 *Checkpoint/Restore In Userspace* (short *CRIU*) [@criu] is the current implementation of checkpointing of userspace processes on Linux.
-It allows to dump a complete process tree to disk, which can be later used to restore the process.
+It allows to dump a complete process tree to disk, which can be later used to restore the processes.
 *CRIU* is used for checkpointing in *LXC*, *Podman*, *Docker*, and *Kubernetes*.
 
 Its *libsoccr* [@libsoccr] library allows to fully checkpoint a TCP connection.
 Active connections are saved by first putting the socket into *repair mode* ([`TCP_REPAIR`](https://lwn.net/Articles/495304/)), this allows the application to access the associated kernel state.
-The connection's kernel state is saved and then the connection is terminated without sending a `FIN` or `RST` TCP-packet.
+The connection's kernel state is saved and then the connection is terminated without sending a `FIN` or `RST` TCP-packet to the peer.
 A new socket can later be created on the same TCP port and with the same kernel state to resume the connection.
 As long as the connection is restored quickly enough, nothing will have changed from the peer's perspective and TCP's retransmission mechanism will mask the interruption.
 
@@ -219,11 +219,10 @@ These processes need not run on the same host, but unlike with *libsoccr* extern
 
 ### systemd File Descriptor Store
 
-A relatively unused feature of the systemd service manager is its [*file descriptor store*](https://systemd.io/FILE_DESCRIPTOR_STORE/).
+The systemd service manager provides a [*file descriptor store*](https://systemd.io/FILE_DESCRIPTOR_STORE/) [@systemd_fdstore].
 This store allows services to persist open file descriptors across service restarts through [`sd_pid_notify_with_fds(3)`](https://www.freedesktop.org/software/systemd/man/latest/sd_pid_notify_with_fds.html).
 This can theoretically be used to store active external connections and later resume them.
 But generally no guarantees are made as to its persistence or the number of file descriptors a service can store.
 
-## Restart $\subseteq$ Crash
-
-**TODO** discuss in Design
+This feature appears to be relatively unused.
+A superficial scan of 36,032 packages from Debian Trixie revealed no packages using it.
