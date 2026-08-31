@@ -5,7 +5,11 @@ networks:
 
 services:
   nginx:
-    image: docker.io/library/nginx:1.30.4-alpine3.24
+    build:
+      context: ./empty/
+      dockerfile_inline: |
+        FROM docker.io/library/nginx:1.30.4-alpine3.24
+        RUN ["sed", "-e", "s/\\baccess_log .*$/access_log off;/", "-i", "/etc/nginx/nginx.conf"]
     volumes:
     - type: bind
       source: @nginxFiles@
