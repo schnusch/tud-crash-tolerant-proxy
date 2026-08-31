@@ -56,25 +56,31 @@
       '';
   };
 
-  vegeta.benchmarkScript = ''
-    PS4='$ '
-    set -x
-    ${lib.getExe pkgs.vegeta} attack \
-        -connections="$BENCHMARK_PARALLEL" \
-        -max-connections="$BENCHMARK_PARALLEL" \
-        -workers="$(($BENCHMARK_PARALLEL * 2))" \
-        -max-workers="$(($BENCHMARK_PARALLEL * 2))" \
-        -rate=0 \
-        -duration="''${BENCHMARK_DURATION}s" << eof \
-      | ${lib.getExe pkgs.gzip} --fast \
-      > vegeta.gz
-    GET http://$BENCHMARK_HOST/$BENCHMARK_FILE
-    eof
-    ${lib.getExe' pkgs.coreutils "ls"} -dhlp vegeta.gz
-    { echo "timestamp_ns,status_code,latency_ns,bytes_out,bytes_in,error,response_body,attack_name,sequence_number,method,url,response_headers"
-      ${lib.getExe pkgs.gzip} -d < vegeta.gz | ${lib.getExe pkgs.vegeta} encode -to=csv
-    } | ${lib.getExe pkgs.xan} drop response_body,response_headers > "/run/benchmark/$BENCHMARK_CSV"
-  '';
+  vegeta.benchmarkScript =
+    let
+      vegeta' = pkgs.vegeta.overrideAttrs (prevAttrs: {
+        patches = (prevAttrs.patches or [ ]) ++ [ ./vegeta-discard-body.patch ];
+      });
+    in
+    ''
+      PS4='$ '
+      set -x
+      ${lib.getExe vegeta'} attack \
+          -connections="$BENCHMARK_PARALLEL" \
+          -max-connections="$BENCHMARK_PARALLEL" \
+          -workers="$(($BENCHMARK_PARALLEL * 2))" \
+          -max-workers="$(($BENCHMARK_PARALLEL * 2))" \
+          -rate=0 \
+          -duration="''${BENCHMARK_DURATION}s" << eof \
+        | ${lib.getExe pkgs.gzip} --fast \
+        > vegeta.gz
+      GET http://$BENCHMARK_HOST/$BENCHMARK_FILE
+      eof
+      ${lib.getExe' pkgs.coreutils "ls"} -dhlp vegeta.gz
+      { echo "timestamp_ns,status_code,latency_ns,bytes_out,bytes_in,error,response_body,attack_name,sequence_number,method,url,response_headers"
+        ${lib.getExe pkgs.gzip} -d < vegeta.gz | ${lib.getExe vegeta'} encode -to=csv
+      } | ${lib.getExe pkgs.xan} drop response_body,response_headers > "/run/benchmark/$BENCHMARK_CSV"
+    '';
 
   wrk.benchmarkScript = ''
     PS4='$ '

@@ -1,0 +1,20 @@
+--- a/lib/attack.go
++++ b/lib/attack.go
+@@ -597,13 +597,15 @@ func (a *Attacker) hit(tr Targeter, atk *attack) *Result {
+ 		body = io.LimitReader(r.Body, a.maxBody)
+ 	}
+ 
+-	if res.Body, err = io.ReadAll(body); err != nil {
++	var n int64
++	n, err = io.Copy(io.Discard, body)
++	if err != nil {
+ 		return &res
+ 	} else if _, err = io.Copy(io.Discard, r.Body); err != nil {
+ 		return &res
+ 	}
+ 
+-	res.BytesIn = uint64(len(res.Body))
++	res.BytesIn = uint64(n)
+ 
+ 	if req.ContentLength != -1 {
+ 		res.BytesOut = uint64(req.ContentLength)
