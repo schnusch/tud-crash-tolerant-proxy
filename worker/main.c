@@ -110,6 +110,16 @@ static int epoll_mod(struct context *ctx, int fd, uint32_t events) {
     return 0;
 }
 
+static int epoll_closep(struct context *ctx, int *fd) {
+    // It is **probably** enough to just set `info->state = 0` instead of
+    // `EPOLL_CTL_DEL`, but its cleaner.
+    struct fd_info *info = fd_info_get(&ctx->fd_info, &ctx->num_fds, *fd);
+    if(info && epoll_mod(ctx, *fd, 0) < 0) {
+        perror("epoll_ctl");
+    }
+    return closep(fd);
+}
+
 /**
  * Set epoll events according to `rx` and `tx` buffers.
  */
@@ -422,7 +432,7 @@ static int handle_connection(struct context *ctx, int fd, uint32_t events) {
             LOG(LOG_DEBUG, "connections: [%s]\n", connection_status_all(&ctx->map, slot));
             FOREACH_CONNECTION_ENDPOINT(endpoint, conn) {
                 LOG_CONN(LOG_DEBUG_BYTES, "close(%d)\n", endpoint->fd[1]);
-                if(closep(&endpoint->fd[1]) < 0) {
+                if(epoll_closep(ctx, &endpoint->fd[1]) < 0) {
                     if(errno == EBADF) {
                         endpoint->fd[1] = -1;
                     }
@@ -686,8 +696,9 @@ static int ipc_close(const char *action, size_t slot, int fd, const char *tail, 
 
     struct connection *conn = shared_memory_get_connection(&ctx->map, slot);
     assert(conn);
+
     FOREACH_CONNECTION_ENDPOINT(endpoint, conn) {
-        if(closep(&endpoint->fd[1]) < 0) {
+        if(epoll_closep(ctx, &endpoint->fd[1]) < 0) {
             if(errno == EBADF) {
                 endpoint->fd[1] = -1;
             } else {
