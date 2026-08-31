@@ -7,11 +7,11 @@
 #include <stdlib.h> // free
 #include <sys/wait.h>
 
-#include "clone3.h"
 #include "listen.h"
 #include "main_active.h"
 #include "main_passive.h"
 #include "pidfd.h"
+#include "../common/clone3.h"
 #include "../common/util.h"
 #include "../libcrash/libcrash.h"
 

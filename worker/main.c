@@ -12,6 +12,7 @@
 #include "cmdline.h"
 #include "fd_info.h"
 #include "../common/accept.h"
+#include "../common/clone3.h"
 #include "../common/ipc.h"
 #include "../common/shared_memory.h"
 #include "../common/util.h"
@@ -804,6 +805,111 @@ static const struct ipc_action_method ipc_methods[] = {
     {NULL, NULL},
 };
 
+#ifdef PERFORMANCE_BASELINE
+#include <sys/eventfd.h>
+#include <sys/wait.h>
+
+static int proc_accept(int evfd, struct shared_memory_mapping *map, int listen_fd, pid_t parent) {
+    while(1) {
+        struct connection *conn = accept_connection(map, listen_fd);
+        if(!conn) {
+            break;
+        }
+
+        // Notify parent process of the connection.
+        uint64_t i = conn - map->addr->connections;
+        if(i & (((uint64_t)1) << 63)) {
+            break;
+        }
+        // (1 << 63) + (1 << 63) would overflow, so write will block, if the
+        // parent has not retrieved it yet.
+        i |= ((uint64_t)1) << 63;
+        if(write(evfd, &i, sizeof(i)) < 0) {
+            perror("write");
+            break;
+        }
+    }
+
+    // Kill the parent process.
+    if(kill(parent, SIGABRT) < 0) {
+        perror("kill");
+    }
+    return 1;
+}
+
+static int start_accept_loop(int listen_fd, struct shared_memory_mapping *map) {
+    int evfd = -1;
+    sigset_t *restore = NULL;
+
+    evfd = eventfd(0, EFD_CLOEXEC);
+    if(evfd < 0) {
+        perror("eventfd");
+        goto error;
+    }
+
+    struct clone_args cl_args = {
+        .flags = CLONE_FILES,
+        .exit_signal = SIGCHLD,
+    };
+
+    // Block SIGCHLD until clone is finished.
+    sigset_t block, old;
+    sigaddset(&block, cl_args.exit_signal);
+    if(sigprocmask(SIG_BLOCK, &block, &old) < 0) {
+        perror("sigprocmask");
+        goto error;
+    }
+    restore = &old;
+
+    // Double-fork (clone) a new process. The subprocess shares file descriptors
+    // with this process and runs `accept_connection` in a loop.
+    pid_t pid = getpid();
+    pid_t child = clone3(&cl_args, sizeof(cl_args));
+    if(child < 0) {
+        perror("clone3");
+        goto error;
+    } else if(child == 0) {
+        child = clone3(&cl_args, sizeof(cl_args));
+        if(child < 0) {
+            perror("clone3");
+            _exit(1);
+        } else if(child == 0) {
+            _exit(proc_accept(evfd, map, listen_fd, pid));
+        } else {
+            _exit(0);
+        }
+        __builtin_trap();
+    }
+
+    // Wait for the direct child process to exit.
+    int wstatus;
+    do {
+        pid_t rc;
+        EINTR_RETRY(child, waitpid(child, &wstatus, WUNTRACED));
+    } while(!WIFEXITED(wstatus) && !WIFSIGNALED(wstatus));
+    if(WIFSIGNALED(wstatus)) {
+        LOG(LOG_ERROR, "accept subprocess killed by signal %s\n", signame(WTERMSIG(wstatus)));
+        goto error;
+    } else if(WIFEXITED(wstatus) && WEXITSTATUS(wstatus) != 0) {
+        goto error;
+    }
+
+    if(0) {
+error:
+        closep(&evfd);
+        evfd = -1;
+    }
+    if(restore) {
+        if(sigprocmask(SIG_SETMASK, restore, NULL) < 0) {
+            perror("sigprocmask");
+            restore = NULL; // Avoid loop.
+            goto error;
+        }
+    }
+    return evfd;
+}
+#endif
+
 static void free_context(struct context *ctx) {
     free(ctx->fd_info);
     ctx->fd_info = NULL;
@@ -844,16 +950,20 @@ int main(int argc, char **argv) {
 #ifdef PERFORMANCE_BASELINE
     // Poll listening sockets.
     for(size_t i = 0; i < cmdline.num_listen_fds; ++i) {
-        info = fd_info_get(&ctx.fd_info, &ctx.num_fds, cmdline.listen_fds[i]);
+        int evfd = start_accept_loop(cmdline.listen_fds[i], &ctx.map);
+        if(evfd < 0) {
+            return 1;
+        }
+        info = fd_info_get(&ctx.fd_info, &ctx.num_fds, evfd);
         if(!info) {
             perror("realloc");
             return 1;
         }
         *info = (struct fd_info){
-            .type = FD_TYPE_LISTEN,
+            .type = FD_TYPE_EVENT,
             .events = 0,
         };
-        if(epoll_mod(&ctx, cmdline.listen_fds[i], EPOLLIN | EPOLLRDHUP) < 0) {
+        if(epoll_mod(&ctx, evfd, EPOLLIN | EPOLLRDHUP) < 0) {
             perror("epoll_ctl");
             return 1;
         }
@@ -950,10 +1060,21 @@ int main(int argc, char **argv) {
 
             switch(info->type) {
 #ifdef PERFORMANCE_BASELINE
-            case FD_TYPE_LISTEN:
+            case FD_TYPE_EVENT:
                 {
-                    struct connection *conn = accept_connection(&ctx.map, evs[i].data.fd);
-                    if(!conn || indirect_connect(&ctx, conn - ctx.map.addr->connections) < 0) {
+                    // Read the received connection from the eventfd.
+                    uint64_t i;
+                    ssize_t nread;
+                    EINTR_RETRY(nread, read(fd, &i, sizeof(i)));
+                    if(nread != sizeof(i)) {
+                        LOG(LOG_ALWAYS, "read(%d, &i, %zu) == %zd\n", fd, sizeof(i), nread);
+                        return 1;
+                    }
+                    i &= ~(((uint64_t)1) << 63);
+
+                    struct connection *conn = shared_memory_get_connection(&ctx.map, i);
+                    assert(conn);
+                    if(indirect_connect(&ctx, i) < 0) {
                         return 1;
                     }
                     conn->downstream.fd[1] = conn->downstream.fd[0];
@@ -963,7 +1084,7 @@ int main(int argc, char **argv) {
                 {
                     int e;
                     socklen_t len = sizeof(e);
-                    if(getsockopt(evs[i].data.fd, SOL_SOCKET, SO_ERROR, &e, &len) < 0) {
+                    if(getsockopt(fd, SOL_SOCKET, SO_ERROR, &e, &len) < 0) {
                         perror("getsockopt");
                         return 1;
                     }
@@ -976,11 +1097,11 @@ int main(int argc, char **argv) {
                     // ipc_connected calls EPOLL_CTL_ADD, so the file descriptor
                     // has to be un-registered first.
                     // TODO remove this
-                    if(epoll_mod(&ctx, evs[i].data.fd, 0) < 0) {
+                    if(epoll_mod(&ctx, fd, 0) < 0) {
                         perror("epoll_ctl");
                         return 1;
                     }
-                    if(ipc_connected("connected", info->slot, evs[i].data.fd, NULL, &ctx) != 0) {
+                    if(ipc_connected("connected", info->slot, fd, NULL, &ctx) != 0) {
                         return 1;
                     }
                 }
