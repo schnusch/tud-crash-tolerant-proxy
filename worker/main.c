@@ -1047,10 +1047,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-#ifdef PERFORMANCE_BASELINE
-    // TODO really necessary?
     signal(SIGPIPE, SIG_IGN);
-#endif
 
     while(1) {
         struct epoll_event evs[16];
