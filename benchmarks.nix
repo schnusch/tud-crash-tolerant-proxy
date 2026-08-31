@@ -56,6 +56,19 @@
       '';
   };
 
+  random = {
+    upstreamHost = "random.";
+    benchmarkScript = ''
+      PS4='$ '
+      set -x
+      exec ${lib.getExe (pkgs.python3.withPackages (ps: [ ps.numpy ]))} \
+        ${./tools/rand.py} \
+        -n"$BENCHMARK_REQUESTS" \
+        -c"$BENCHMARK_PARALLEL" \
+        "$BENCHMARK_HOST" 80
+    '';
+  };
+
   vegeta.benchmarkScript =
     let
       vegeta' = pkgs.vegeta.overrideAttrs (prevAttrs: {

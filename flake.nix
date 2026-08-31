@@ -159,6 +159,14 @@
             ''
           );
 
+          randomCommand = [
+            (lib.getExe (pkgs.python3.withPackages (ps: [ ps.numpy ])))
+            (toString ./tools/rand.py)
+            "-l"
+            "0.0.0.0"
+            "80"
+          ];
+
           # Generate a compose file per benchmark and transformation.
           compose =
             lib.flip lib.mapAttrs
@@ -190,6 +198,7 @@
                         nginxFiles
                         nginxPort
                         proxyPort
+                        randomCommand
                         ;
                       # Vary by flavor and benchmark.
                       baselineCommand = [
