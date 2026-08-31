@@ -340,6 +340,14 @@ static int eval_parse_result(
 #undef JSON
 }
 
+static const char *str_pid(void) {
+    static char *buf = NULL;
+    if(!buf) {
+        assert(asprintf(&buf, "%d", (int)getpid()) >= 0);
+    }
+    return buf;
+}
+
 int transform(
     int slot,
     transformation_context_t *ctx,
@@ -437,6 +445,7 @@ int transform(
                 replace_header(&resp.headers, &resp.num_headers, "Connection", "close") < 0
                 || replace_header(&resp.headers, &resp.num_headers, "Server", USER_AGENT) < 0
                 || replace_header(&resp.headers, &resp.num_headers, "X-Clacks-Overhead", "GNU Terry Pratchett") < 0
+                || replace_header(&resp.headers, &resp.num_headers, "X-Proxy-PID", str_pid()) < 0
             ) {
                 perror("replace_header");
             } else {
