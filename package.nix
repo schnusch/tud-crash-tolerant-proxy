@@ -11,6 +11,7 @@
   systemd ? null,
   valgrindWorker ? false,
   extraCppFlags ? [ ],
+  extraLdFlags ? [ ],
   libcrashFlavor ? null,
 }:
 
@@ -43,7 +44,8 @@ stdenv.mkDerivation {
         EXTRA_LDFLAGS = {
           "-lbacktrace" = libbacktrace != null;
           "-lsystemd" = systemd != null;
-        };
+        }
+        // lib.genAttrs extraLdFlags (_: true);
       };
       activeFlags =
         flags: lib.concatLists (lib.mapAttrsToList (flag: enable: lib.optional enable flag) flags);

@@ -172,16 +172,33 @@
             lib.flip lib.mapAttrs
               {
                 # Per transformation package override.
-                transform_headers = { };
-                transform_nop = prev: {
-                  extraCppFlags = (prev.extraCppFlags or [ ]) ++ [ "-DNOP_TRANSFORM" ];
-                };
+                transform_expensive = lib.flip lib.pipe [
+                  (
+                    package:
+                    package.overrideAttrs (prevAttrs: {
+                      buildInputs = (prevAttrs.buildInputs or [ ]) ++ [ pkgs.openssl ];
+                    })
+                  )
+                  (
+                    package:
+                    package.override (prev: {
+                      extraCppFlags = (prev.extraCppFlags or [ ]) ++ [ "-DEXPENSIVE_TRANSFORM" ];
+                      extraLdFlags = (prev.extraLdFlags or [ ]) ++ [ "-lcrypto" ];
+                    })
+                  )
+                ];
+                transform_headers = lib.id;
+                transform_nop =
+                  package:
+                  package.override (prev: {
+                    extraCppFlags = (prev.extraCppFlags or [ ]) ++ [ "-DNOP_TRANSFORM" ];
+                  });
               }
               (
                 name: override:
                 let
-                  baselinePackage = self.packages.${system}.performance-baseline.override override;
-                  proxyPackage = self.packages.${system}.libcrash.signal.override override;
+                  baselinePackage = override self.packages.${system}.performance-baseline;
+                  proxyPackage = override self.packages.${system}.libcrash.signal;
                 in
                 lib.flip lib.mapAttrs (import ./benchmarks.nix { inherit lib pkgs; }) (
                   _:

@@ -348,6 +348,49 @@ static const char *str_pid(void) {
     return buf;
 }
 
+#ifdef EXPENSIVE_TRANSFORM
+#include <openssl/sha.h>
+
+static void sha256_rounds(char dst[SHA256_DIGEST_LENGTH], const char *src, size_t len, unsigned int iterations) {
+    char tmp[SHA256_DIGEST_LENGTH];
+    for(; iterations > 0; --iterations) {
+        char *out = (iterations & 1) ? dst : tmp;
+        SHA256(src, len, out);
+        src = out;
+        len = sizeof(tmp);
+    }
+}
+
+/**
+ * Generates a random string of the following format:
+ * `"${HEX_RANDOM} ${HEX_SHA256}\0"`
+ */
+static char *random_sha256(char buf[4 * SHA256_DIGEST_LENGTH + 2]) {
+    char *src = buf + SHA256_DIGEST_LENGTH;
+    for(uint32_t *p = (uint32_t *)src; p < buf + SHA256_DIGEST_LENGTH; ++p) {
+        *p = mrand48();
+    }
+
+    char *dst = buf + 3 * SHA256_DIGEST_LENGTH + 1;
+    sha256_rounds(dst, src, SHA256_DIGEST_LENGTH, 10000);
+
+    for(char **pp = (char *[]){src, dst, NULL}; *pp; ++pp) {
+        src = *pp;
+        dst = src - SHA256_DIGEST_LENGTH;
+        for(size_t i = SHA256_DIGEST_LENGTH; i > 0; --i) {
+            static const char hex[] = "0123456789abcdef";
+            *dst++ = hex[(*src >> 4) & 0x0F];
+            *dst++ = hex[*src & 0x0F];
+            ++src;
+        }
+    }
+    buf[2 * SHA256_DIGEST_LENGTH] = ' ';
+    buf[4 * SHA256_DIGEST_LENGTH + 1] = '\0';
+
+    return buf;
+}
+#endif
+
 int transform(
     int slot,
     transformation_context_t *ctx,
@@ -368,6 +411,9 @@ int transform(
 #else
     int state = ctx->copies[!ctx->active].state;
 #endif
+#ifdef EXPENSIVE_TRANSFORM
+    char sha_buf[4 * SHA256_DIGEST_LENGTH + 2];
+#endif
 
     if(!(state & HTTP_GOT_REQUEST)) {
         // Parse request.
@@ -383,6 +429,9 @@ int transform(
                 || replace_header(&req.headers, &req.num_headers, "User-Agent", USER_AGENT) < 0
                 || replace_header(&req.headers, &req.num_headers, "DNT", "1") < 0
                 || replace_header(&req.headers, &req.num_headers, "Sec-GPC", "1") < 0
+#ifdef EXPENSIVE_TRANSFORM
+                || replace_header(&req.headers, &req.num_headers, "X-Random-SHA256", random_sha256(sha_buf)) < 0
+#endif
             ) {
                 perror("replace_header");
             } else {
@@ -446,6 +495,9 @@ int transform(
                 || replace_header(&resp.headers, &resp.num_headers, "Server", USER_AGENT) < 0
                 || replace_header(&resp.headers, &resp.num_headers, "X-Clacks-Overhead", "GNU Terry Pratchett") < 0
                 || replace_header(&resp.headers, &resp.num_headers, "X-Proxy-PID", str_pid()) < 0
+#ifdef EXPENSIVE_TRANSFORM
+                || replace_header(&resp.headers, &resp.num_headers, "X-Random-SHA256", random_sha256(sha_buf)) < 0
+#endif
             ) {
                 perror("replace_header");
             } else {
