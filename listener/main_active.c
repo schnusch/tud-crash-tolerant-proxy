@@ -423,12 +423,6 @@ void cleanup_worker_process(struct worker_process *proc, struct shared_memory_ma
 }
 
 int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map, int parent_pidfd) {
-    // Move the listener and its workers to a separate process group.
-    if(setpgid(0, 0) < 0) {
-        perror("setpgid");
-        return 1;
-    }
-
     // Array of file descriptors known to the listener.
     struct epoll_context ctx = {
         .epfd = -1,

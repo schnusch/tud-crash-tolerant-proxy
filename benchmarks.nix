@@ -3,6 +3,53 @@
   pkgs,
   self,
 }:
+let
+  injectPGid = pkgs.writeShellScript "inject" ''
+    set -euo pipefail
+    group="$1"
+    crash="$2"
+    ${lib.getExe' pkgs.procps "ps"} -A --no-heading -o pgid,pid \
+    | (
+      set --
+      while read pgid pid; do
+        [ "$pgid" -ne "$group" ] || set -- "$@" "$pid"
+      done
+      PS4='$ '
+      set -x
+      set +e
+      for pid in "$@"; do
+        inject "$pid" "$crash"
+      done
+      :
+    )
+  '';
+
+  inject = crash: {
+    upstreamHost = "random.";
+    benchmarkScript = ''
+      PS4='$ '
+      set -x
+      exec ${lib.getExe (pkgs.python3.withPackages (ps: [ ps.numpy ]))} \
+        ${self.outPath}/tools/idle.py \
+        -c"$BENCHMARK_PARALLEL" \
+        -t6 \
+        "$BENCHMARK_HOST" 80
+    '';
+    background = pkgs.writeShellScript "background" ''
+      PS4='$ '
+      set -eux
+      ${lib.getExe' pkgs.coreutils "sleep"} 3
+
+      : "Before error injection:"
+      ${lib.getExe' pkgs.psmisc "pstree"} --unicode --long --show-pids --show-pgids 1
+
+      ${lib.getExe pkgs.strace} -fe trace=rt_sigqueueinfo ${injectPGid} "$(< /run/proxy.pgid)" ${lib.escapeShellArgs crash}
+
+      : "After error injection:"
+      ${lib.getExe' pkgs.psmisc "pstree"} --unicode --long --show-pids --show-pgids 1
+    '';
+  };
+in
 {
   # https://stackoverflow.com/a/34785677
   ab.benchmarkScript = ''
@@ -30,6 +77,9 @@
       --json-metrics-file="/run/benchmark/$BENCHMARK_JSON"
     ${lib.getExe' pkgs.coreutils "mv"} raw.csv "/run/benchmark/$BENCHMARK_CSV"
   '';
+
+  fail-accept = inject [ "ACCEPT_POST" ];
+  fail-connect = inject [ "CONNECT_POST" ];
 
   first-byte = {
     upstreamHost = "benchmark.";

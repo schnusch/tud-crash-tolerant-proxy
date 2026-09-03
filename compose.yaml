@@ -68,6 +68,7 @@ services:
     environment:
       PATH: @proxyPath@
     command: @proxyCommand@
+    healthcheck: @proxyHealthcheck@
     env_file:
     - ./proxy.env
     ports:

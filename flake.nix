@@ -41,9 +41,25 @@
               valgrindWorker = useValgrind;
             };
 
-            libcrash = lib.genAttrs [ "nop" "signal" ] (
-              libcrashFlavor: self.packages.${system}.default.override { inherit libcrashFlavor; }
-            );
+            libcrash =
+              lib.flip lib.mapAttrs
+                {
+                  nop = { };
+                  signal = prevAttrs: {
+                    preBuild = ''
+                      ${prevAttrs.preBuild or ""}
+                      sed -e '/^all:/ s,,& bin/inject,' -i GNUmakefile
+                    '';
+                    postInstall = ''
+                      ${prevAttrs.postInstall or ""}
+                      cp bin/inject "$out/bin/inject"
+                    '';
+                  };
+                }
+                (
+                  libcrashFlavor: overrideAttrs:
+                  (self.packages.${system}.default.override { inherit libcrashFlavor; }).overrideAttrs overrideAttrs
+                );
 
             performance-baseline = lib.pipe self.packages.${system}.default [
               (
@@ -97,10 +113,14 @@
           startProxy = pkgs.writeShellScript "start-proxy.sh" ''
             set -eu
 
+            background=""
             pgid_file=""
             upstream=""
-            while getopts 'g:H:' opt; do
+            while getopts 'D:g:H:' opt; do
               case "$opt" in
+                D)
+                  background="$OPTARG"
+                  ;;
                 g)
                   pgid_file="$OPTARG"
                   ;;
@@ -116,24 +136,30 @@
 
             PS4='$ '
             set -x
+            export PATH="''${PATH-}''${PATH:+:}"${
+              lib.makeBinPath [
+                pkgs.glibc.getent
+                pkgs.coreutils
+              ]
+            }
 
             # Resolve upstream host.
             [ -n "$upstream" ] || exit 2
-            while ! resolved=$(${pkgs.glibc.getent}/bin/getent hosts "$upstream"); do
-              ${lib.getExe' pkgs.coreutils "sleep"} .1
+            while ! resolved=$(getent hosts "$upstream"); do
+              sleep .1
             done
             upstream="''${resolved%% *}"
             unset resolved
 
-            # Save process group ID to $pgid_file.
-            [ -z "$pgid_file" ] || ${lib.getExe' pkgs.coreutils "tee"} "$pgid_file" > /dev/null << eof
-            -$$
-            eof
+            if [ -n "$background" ]; then
+              ("$background" &)
+            fi
 
-            exec ${
+            # The write end is closed when all processes of the proxy termianted.
+            mkfifo /tmp/stdin.fifo
+            ${
               lib.escapeShellArgs (
-                [ newpgrp ]
-                ++ lib.optionals useStrace [
+                lib.optionals useStrace [
                   (lib.getExe pkgs.strace)
                   "-f"
                   "-e"
@@ -142,8 +168,35 @@
                   "status=failed"
                   "--"
                 ]
+                ++ [
+                  pkgs.runtimeShell
+                  "-c"
+                  ''
+                    set -e
+                    # Save process group ID to $pgid_file.
+                    [ -z "$1" ] || tee "$1" > /dev/null << eof
+                    $$
+                    eof
+                    shift
+                    exec ${newpgrp} "$@"
+                  ''
+                  "-"
+                ]
               )
-            } "$@" -l 0.0.0.0:80 --upstream-address="$upstream:80"
+            } "$pgid_file" \
+              "$@" -l 0.0.0.0:80 --upstream-address="$upstream:80" < /tmp/stdin.fifo &
+
+            (
+              (
+                sleep 1
+                exec ${lib.getExe' pkgs.psmisc "pstree"} --unicode --long --show-pids --show-pgids 1
+              ) &
+            )
+            exec > /tmp/stdin.fifo
+            rm -f /tmp/stdin.fifo >&2
+
+            # `yes` will be killed by SIGPIPE if the write end is closed.
+            exec yes ""
           '';
 
           proxyPort = 12345;
@@ -205,6 +258,7 @@
                   {
                     benchmarkScript,
                     upstreamHost ? "nginx.",
+                    background ? null,
                   }:
                   pkgs.replaceVarsWith {
                     src = "${self.outPath}/compose.yaml";
@@ -230,10 +284,16 @@
                         "-H${upstreamHost}"
                         "-g/run/proxy.pgid"
                       ]
+                      ++ (lib.optional (background != null) "-D${background}")
                       ++ [
                         "--"
                         "crash-tolerant-proxy"
                       ];
+                      proxyHealthcheck = {
+                        # Healthcheck does not seem to work in podman-compose.
+                        # It says somewhere that systemd is used for scheduling...
+                        test = [ "NONE" ];
+                      };
                       benchmarkCommand = [
                         pkgs.runtimeShell
                         "-c"

@@ -74,6 +74,10 @@ bin/launcher: obj/launcher.o obj/common/util.o
 	@mkdir -p $(@D)
 	$(CC) -o $@ $^ $(filter -lbacktrace,$(final_ldflags))
 
+bin/inject: obj/inject.o
+	@mkdir -p $(@D)
+	$(CC) -o $@ $^
+
 bin/listener: $(LISTENER_OBJS)
 	$(MAKE_LIBCRASH) $(LIBCRASH_FLAVOR)/libcrash.so
 	@mkdir -p $(@D)
