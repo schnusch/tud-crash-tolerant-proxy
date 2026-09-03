@@ -123,6 +123,9 @@ void wait_workers(struct worker_process_array *worker_procs) {
             running[i].fd,
             poll_str(str, sizeof(str), running[i].events)
         );
+        if(pidfd_send_signal(proc->pid_fd, SIGTERM, NULL, 0) < 0) {
+            perror("pidfd_send_signal");
+        }
     }
     num_fds = dst;
 
