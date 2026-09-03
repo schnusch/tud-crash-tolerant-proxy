@@ -121,8 +121,29 @@ void init_log_level(void) {
         int e;
         log_level = strtol_limit(&e, level, 0, LOG_BACKTRACE - 1);
         if(e) {
-            log_level = LOG_BACKTRACE - 1;
-            perror("strtol");
+            log_level = DEFAULT_LOG_LEVEL;
+            static const struct str_bit levels[] = {
+#define LOG_STR(x) { .num = LOG_##x, .str = #x }
+                LOG_STR(ALWAYS),
+                LOG_STR(ERROR),
+                LOG_STR(INFO),
+                LOG_STR(DEBUG),
+                LOG_STR(DEBUG_HTTP),
+                LOG_STR(DEBUG_IPC),
+                LOG_STR(DEBUG_STATE),
+                LOG_STR(DEBUG_BYTES),
+#undef LOG_STR
+                {0, NULL}
+            };
+            for(const struct str_bit *l = levels; l->str; ++l) {
+                if(strcasecmp(level, l->str) == 0) {
+                    log_level = l->num;
+                    break;
+                }
+            }
+            if(log_level == DEFAULT_LOG_LEVEL) {
+                perror("strtol");
+            }
         }
         log_level &= LOG_BACKTRACE - 1;
     }
