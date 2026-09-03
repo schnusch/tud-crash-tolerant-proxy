@@ -422,6 +422,61 @@ void cleanup_worker_process(struct worker_process *proc, struct shared_memory_ma
     proc->pid = -1;
 }
 
+/**
+ * Pass orphaned connections to `ipc_fd`.
+ */
+int adopt_connections(int ipc_fd, struct shared_memory_mapping *map) {
+    FOREACH_CONNECTION(conn, map) {
+        int state = atomic_load_explicit(&conn->state, memory_order_acquire);
+        if(state == CONN_UNUSED || conn->worker_pid >= 0) {
+            continue;
+        }
+        size_t slot = conn - map->addr->connections;
+        LOG(
+            LOG_INFO,
+            "slot=%zu %d" UTF8_ARROW_EAST "%d: distributing orphaned connection (0x%X)\n",
+            slot,
+            conn->downstream.fd[0],
+            conn->upstream.fd[0],
+            state
+        );
+        int e = 0;
+        switch(state & CONN_STATE_BITS) {
+        case CONN_CONNECTING:
+            // The worker will not initialize its connection slot if it receives
+            // orphan_up, but it might be uninitialized, due to an unfortunate
+            // crash and later recovery.
+            conn->downstream.rx = ATOMIC_RING_BUFFER_INIT;
+            conn->downstream.tx = ATOMIC_RING_BUFFER_INIT;
+            conn->upstream.rx = ATOMIC_RING_BUFFER_INIT;
+            conn->upstream.tx = ATOMIC_RING_BUFFER_INIT;
+            atomic_store_explicit(&conn->state, CONN_POLL, memory_order_release);
+            __attribute__((fallthrough));
+        case CONN_POLL:
+        case CONN_SWAP_BUFFERS:
+            // Upstream and downstreams file descriptors were saved.
+            assert(conn->upstream.fd[0] >= 0);
+            e = ipc_send(ipc_fd, "orphan_down", slot, conn->downstream.fd[0], NULL);
+            break;
+        case CONN_ACCEPTING:
+            // Only the downstream file descriptor was saved, worker will
+            // trigger the reconnect to upstream.
+            e = ipc_send(ipc_fd, "accepted", slot, conn->downstream.fd[0], NULL);
+            break;
+        default:
+            ;
+            char str[512];
+            LOG(LOG_ERROR, "unexpected state %s\n", str_state(str, sizeof(str), state));
+            break;
+        }
+        if(e < 0) {
+            perror("ipc_send");
+            return -1;
+        }
+    }
+    return 0;
+}
+
 int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map, int parent_pidfd) {
     // Array of file descriptors known to the listener.
     struct epoll_context ctx = {
@@ -541,6 +596,9 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
         assert(proc);
         if(proc->pid_fd < 0) {
             // Start new worker process.
+            if((closep(&proc->ipc_fd) | closep(&proc->pid_fd)) < 0) {
+                perror("close");
+            }
             if(worker_process_spawn(&ctx, proc, i, cmdline, cmdline->ipc_broadcast[0]) < 0) {
                 return 1;
             }
@@ -637,43 +695,8 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
     }
 
     // Distribute orphaned connections to workers.
-    FOREACH_CONNECTION(conn, map) {
-        int state = atomic_load_explicit(&conn->state, memory_order_acquire);
-        if(state == CONN_UNUSED || conn->worker_pid >= 0) {
-            continue;
-        }
-        size_t slot = conn - map->addr->connections;
-        LOG(
-            LOG_INFO,
-            "slot=%zu %d" UTF8_ARROW_EAST "%d: distributing orphaned connection (0x%X)\n",
-            slot,
-            conn->downstream.fd[0],
-            conn->upstream.fd[0],
-            state
-        );
-        int e = 0;
-        switch(state & CONN_STATE_BITS) {
-        case CONN_POLL:
-        case CONN_SWAP_BUFFERS:
-            // Upstream and downstreams file descriptors were saved.
-            e = ipc_send(cmdline->ipc_broadcast[1], "orphan_down", slot, conn->downstream.fd[0], NULL);
-            break;
-        case CONN_ACCEPTING:
-        case CONN_CONNECTING:
-            // Only the downstream file descriptor was saved, reconnect to
-            // upstream.
-            e = ipc_send(cmdline->ipc_broadcast[1], "accepted", slot, conn->downstream.fd[0], NULL);
-            break;
-        default:
-            ;
-            char str[512];
-            LOG(LOG_ERROR, "unexpected state %s\n", str_state(str, sizeof(str), state));
-            break;
-        }
-        if(e < 0) {
-            perror("ipc_send");
-            return 1;
-        }
+    if(adopt_connections(cmdline->ipc_broadcast[1], map) < 0) {
+        return 1;
     }
 
     while(1) {
@@ -765,9 +788,17 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
                     );
                     cleanup_worker_process(proc, map);
 
-                    // TODO start new worker process and pass orphaned
-                    // connections to it.
-                    return 1;
+                    // Start new worker process.
+                    if(worker_process_spawn(&ctx, proc, info->slot, cmdline, cmdline->ipc_broadcast[0]) < 0) {
+                        return 1;
+                    }
+                    // Orphaned connections will now be pushed on the broadcast
+                    // IPC socket. So they could end up with any (not only the
+                    // newly started) worker. (Could just be changed to
+                    // `proc->ipc_fd`.)
+                    if(adopt_connections(cmdline->ipc_broadcast[1], map) < 0) {
+                        return 1;
+                    }
                 }
                 break;
             case FD_TYPE_SIGNAL:
