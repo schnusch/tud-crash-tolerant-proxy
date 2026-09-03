@@ -393,9 +393,9 @@
 
                         temp=$(mktemp -d)
                         (
-                          mkdir -p benchmark
-                          ln -rs benchmark "$temp/"
-                          cd "$temp"
+                          mkdir -p "$temp/foo" benchmark
+                          ln -rs benchmark "$temp/foo/"
+                          cd "$temp/foo"
                           mkdir empty
                           ln -s ${compose_yaml} compose.yaml
                           cat compose.yaml
