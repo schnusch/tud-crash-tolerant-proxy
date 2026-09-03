@@ -37,7 +37,7 @@
         system: pkgs:
         let
           proxyPkgs = {
-            default = pkgs.callPackage ./package.nix {
+            default = pkgs.callPackage "${self.outPath}/package.nix" {
               valgrindWorker = useValgrind;
             };
 
@@ -161,7 +161,7 @@
 
           randomCommand = [
             (lib.getExe (pkgs.python3.withPackages (ps: [ ps.numpy ])))
-            (toString ./tools/rand.py)
+            "${self.outPath}/tools/rand.py"
             "-l"
             "0.0.0.0"
             "80"
@@ -200,14 +200,14 @@
                   baselinePackage = override self.packages.${system}.performance-baseline;
                   proxyPackage = override self.packages.${system}.libcrash.signal;
                 in
-                lib.flip lib.mapAttrs (import ./benchmarks.nix { inherit lib pkgs; }) (
+                lib.flip lib.mapAttrs (import "${self.outPath}/benchmarks.nix" { inherit lib pkgs self; }) (
                   _:
                   {
                     benchmarkScript,
                     upstreamHost ? "nginx.",
                   }:
                   pkgs.replaceVarsWith {
-                    src = ./compose.yaml;
+                    src = "${self.outPath}/compose.yaml";
                     replacements = lib.mapAttrs (_: v: builtins.replaceStrings [ "$" ] [ "$$" ] (builtins.toJSON v)) {
                       # Global constants.
                       inherit
@@ -251,7 +251,7 @@
         in
         proxyPkgs
         // {
-          devShell = pkgs.callPackage ./shell.nix { };
+          devShell = pkgs.callPackage "${self.outPath}/shell.nix" { };
 
           inherit compose;
 

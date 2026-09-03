@@ -1,4 +1,8 @@
-{ lib, pkgs }:
+{
+  lib,
+  pkgs,
+  self,
+}:
 {
   # https://stackoverflow.com/a/34785677
   ab.benchmarkScript = ''
@@ -32,7 +36,7 @@
     benchmarkScript =
       let
         timeToFirstByte = pkgs.writeCBin "time-to-first-byte" ''
-          #include "${./tools/time-to-first-byte.c}"
+          #include "${self.outPath}/tools/time-to-first-byte.c"
         '';
       in
       ''
@@ -62,7 +66,7 @@
       PS4='$ '
       set -x
       exec ${lib.getExe (pkgs.python3.withPackages (ps: [ ps.numpy ]))} \
-        ${./tools/rand.py} \
+        ${self.outPath}/tools/rand.py \
         -n"$BENCHMARK_REQUESTS" \
         -c"$BENCHMARK_PARALLEL" \
         "$BENCHMARK_HOST" 80
