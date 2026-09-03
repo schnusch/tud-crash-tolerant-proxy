@@ -146,7 +146,8 @@ in
       ${lib.getExe' pkgs.coreutils "ls"} -dhlp vegeta.gz
       { echo "timestamp_ns,status_code,latency_ns,bytes_out,bytes_in,error,response_body,attack_name,sequence_number,method,url,response_headers"
         ${lib.getExe pkgs.gzip} -d < vegeta.gz | ${lib.getExe vegeta'} encode -to=csv
-      } | ${lib.getExe pkgs.xan} drop response_body,response_headers > "/run/benchmark/$BENCHMARK_CSV"
+      } | ${lib.getExe pkgs.xan} drop response_body,response_headers \
+        | ${lib.getExe pkgs.gzip} > "/run/benchmark/$BENCHMARK_CSV.gz"
     '';
 
   wrk.benchmarkScript = ''
