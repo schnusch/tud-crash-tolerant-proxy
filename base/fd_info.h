@@ -24,7 +24,7 @@ struct fd_info {
 #ifdef FD_INFO_LISTENER
         FD_TYPE_LISTEN,
         FD_TYPE_PID,
-        FD_TYPE_STDIO,
+        FD_TYPE_IGNORE,
 #endif
     } type;
 #ifdef FD_INFO_WORKER

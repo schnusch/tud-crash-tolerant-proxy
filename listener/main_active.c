@@ -56,9 +56,7 @@ static void close_connection(struct connection *conn) {
 static int cleanup_connections(
     struct fd_info **fd_info,
     size_t *num_fds,
-    struct shared_memory_mapping *map,
-    const struct worker_process *procs,
-    size_t num_procs
+    struct shared_memory_mapping *map
 ) {
     // TODO Sort non-empty connecions to the front, so the size of the shared
     // memory can be reduced. Must synchronize with workers.
@@ -147,8 +145,9 @@ int recover_one_fd(struct fd_info **known_fds, size_t *num_known_fds) {
         int fd = l;
 
         struct fd_info *info = fd_info_get(known_fds, num_known_fds, fd);
-        if(info) {
+        if(info && info->type != FD_TYPE_UNKNOWN) {
             // File descriptor is known to the listener.
+            LOG(LOG_DEBUG, "fd=%d known info=%p info->type=%zu\n", fd, (void *)info, info->type);
             continue;
         }
 
@@ -189,16 +188,35 @@ int recover_one_fd(struct fd_info **known_fds, size_t *num_known_fds) {
     return unknown_fd;
 }
 
+/**
+ * Register all file descriptors passed on the command line in
+ * `*known_fds`/`*num_known_fds`.
+ */
 static int fds_from_cmdline(struct fd_info **known_fds, size_t *num_known_fds, struct cmdline_opts *cmdline) {
     struct fd_info *info;
+
+    info = fd_info_get(known_fds, num_known_fds, cmdline->shared_mem_fd);
+    if(!info) {
+        goto error;
+    }
+    *info = (struct fd_info){ .type = FD_TYPE_IGNORE };
+
+    for(size_t i = 0; i < cmdline->num_listen_fds; ++i) {
+        info = fd_info_get(known_fds, num_known_fds, cmdline->listen_fds[i]);
+        if(!info) {
+            goto error;
+        }
+        *info = (struct fd_info){ .type = FD_TYPE_LISTEN };
+    }
+
     for(size_t i = 0; i < 2; ++i) {
         info = fd_info_get(known_fds, num_known_fds, cmdline->ipc_broadcast[i]);
         if(!info) {
-            perror("realloc");
-            return 1;
+            goto error;
         }
         *info = (struct fd_info){ .type = FD_TYPE_IPC };
     }
+
     for(size_t i = 0, n = worker_process_array_len(&cmdline->worker_procs); i < n; ++i) {
         struct worker_process *proc = worker_process_array_get(&cmdline->worker_procs, i);
         assert(proc);
@@ -206,8 +224,7 @@ static int fds_from_cmdline(struct fd_info **known_fds, size_t *num_known_fds, s
         if(proc->ipc_fd >= 0) {
             info = fd_info_get(known_fds, num_known_fds, proc->ipc_fd);
             if(!info) {
-                perror("realloc");
-                return 1;
+                goto error;
             }
             *info = (struct fd_info){ .type = FD_TYPE_IPC };
         }
@@ -215,13 +232,17 @@ static int fds_from_cmdline(struct fd_info **known_fds, size_t *num_known_fds, s
         if(proc->pid_fd >= 0) {
             info = fd_info_get(known_fds, num_known_fds, proc->pid_fd);
             if(!info) {
-                perror("realloc");
-                return 1;
+                goto error;
             }
             *info = (struct fd_info){ .type = FD_TYPE_PID };
         }
     }
+
     return 0;
+
+error:
+    perror("realloc");
+    return -1;
 }
 
 /**
@@ -414,36 +435,99 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
         .fd_info = NULL,
         .num_fds = 0,
     };
+
+    // `recover_one_fd` closes all unknown FD_CLOEXEC file descriptors, so
+    // this needs to be registered first.
+    struct fd_info *info = fd_info_get(&ctx.fd_info, &ctx.num_fds, parent_pidfd);
+    if(!info) {
+        perror("realloc");
+        return 1;
+    }
+    *info = (struct fd_info){ .type = FD_TYPE_PID };
+
+    // Ignore stdio file descriptors in `recover_one_fd`.
     for(int *fd = (int[]){ STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, -1 }; *fd >= 0; ++fd) {
-        struct fd_info *info = fd_info_get(&ctx.fd_info, &ctx.num_fds, *fd);
+        info = fd_info_get(&ctx.fd_info, &ctx.num_fds, *fd);
         if(!info) {
             perror("realloc");
             return 1;
         }
-        *info = (struct fd_info){ .type = FD_TYPE_STDIO };
+        *info = (struct fd_info){ .type = FD_TYPE_IGNORE };
     }
+
+    // Add file descriptors from `cmdline` to `ctx.fd_info`.
+    assert(map->fd == cmdline->shared_mem_fd);
     if(fds_from_cmdline(&ctx.fd_info, &ctx.num_fds, cmdline) < 0) {
         return 1;
     }
 
+    // Also registers all open connections in `ctx.fd_info`.
     LOG(LOG_DEBUG, "connections: [%s]\n", connection_status_all(map, -1));
-    if(
-        cleanup_connections(
-            &ctx.fd_info,
-            &ctx.num_fds,
-            map,
-            worker_process_array_get(&cmdline->worker_procs, 0),
-            worker_process_array_len(&cmdline->worker_procs)
-        ) < 0
-    ) {
-        perror("cleanup_connections");
+    if(cleanup_connections(&ctx.fd_info, &ctx.num_fds, map) < 0) {
         return 1;
     }
     LOG(LOG_DEBUG, "connections: [%s]\n", connection_status_all(map, -1));
 
+    // Restore a single file descriptor lost after accept or connect.
+    list_fds(LOG_INFO);
     int recovered_fd = recover_one_fd(&ctx.fd_info, &ctx.num_fds);
-    if(recovered_fd >= 0) {
-        // TODO put to connection
+    if(recovered_fd < 0) {
+        // Make sure no connection is in ACCEPTING or CONNECTION state and
+        // missing a file descriptor.
+        FOREACH_CONNECTION(conn, map) {
+            const int state = atomic_load_explicit(&conn->state, memory_order_acquire);
+            switch(state & CONN_STATE_BITS) {
+            case CONN_POLL:
+            case CONN_SWAP_BUFFERS:
+            case CONN_CONNECTING:
+                assert(conn->upstream.fd[0] >= 0);
+                __attribute__((fallthrough));
+            case CONN_ACCEPTING:
+                assert(conn->downstream.fd[0] >= 0);
+                break;
+            }
+        }
+    } else {
+        // Put the recovered file descriptor to the matching connection.
+        size_t num_match = 0;
+        struct connection *dest_conn = NULL;
+        int *dest = NULL;
+        FOREACH_CONNECTION(conn, map) {
+            const int state = atomic_load_explicit(&conn->state, memory_order_acquire);
+            if(state == CONN_ACCEPTING && conn->downstream.fd[0] < 0) {
+                LOG(LOG_DEBUG, "slot=%zu potential recovery of a downstream file descriptor\n", conn - map->addr->connections);
+                dest_conn = conn;
+                dest = &conn->downstream.fd[0];
+                ++num_match;
+            } else if(state == CONN_CONNECTING && conn->upstream.fd[0] < 0) {
+                LOG(LOG_DEBUG, "slot=%zu potential recovery of an upstream file descriptor\n", conn - map->addr->connections);
+                dest_conn = conn;
+                dest = &conn->upstream.fd[0];
+                ++num_match;
+            }
+        }
+        if(num_match == 1) {
+            int down = dest_conn->downstream.fd[0];
+            int up = dest_conn->upstream.fd[0];
+            *dest = recovered_fd;
+            LOG(
+                LOG_DEBUG,
+                "slot=%zu %d"UTF8_ARROW_EAST"%d recovered: %d"UTF8_ARROW_EAST"%d\n",
+                dest_conn - map->addr->connections,
+                down,
+                up,
+                dest_conn->downstream.fd[0],
+                dest_conn->upstream.fd[0]
+            );
+        } else if(num_match == 0) {
+            LOG(LOG_ERROR, "recovered fd=%d, but no matching connection\n", recovered_fd);
+            closep(&recovered_fd);
+        } else {
+            LOG(LOG_ERROR, "cannot unambiguously recover fd=%d, %zu candidates\n", recovered_fd, num_match);
+            closep(&recovered_fd);
+            // TODO fatal, if multiple connections were expecting file
+            // descriptors, they would now be in an inconsistent state.
+        }
     }
 
     // Initialize epoll.
@@ -609,7 +693,7 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
 
         for(size_t i = 0; i < (size_t)num_events; ++i) {
             const int fd = evs[i].data.fd;
-            struct fd_info *info = fd_info_get(&ctx.fd_info, &ctx.num_fds, fd);
+            info = fd_info_get(&ctx.fd_info, &ctx.num_fds, fd);
             if(!info) {
                 perror("realloc");
                 return 1;
