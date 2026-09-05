@@ -21,6 +21,26 @@ services:
     networks:
     - net
 
+  haproxy:
+    build:
+      context: ./empty/
+      dockerfile_inline: |
+        FROM docker.io/library/haproxy:3.3-alpine3.24
+        COPY <<EOF /usr/local/etc/haproxy/haproxy.cfg
+        global
+            nbthread 1
+        listen proxy
+            mode tcp
+            bind :80
+            server nginx nginx.:80
+        EOF
+    cap_add:
+    - NET_BIND_SERVICE
+    networks:
+    - net
+    depends_on:
+    - nginx
+
   random:
     build: &scratch
       context: ./empty/ # The trailing slash resolves symlinks.
@@ -95,4 +115,5 @@ services:
     - net
     depends_on:
     - baseline
+    - haproxy
     - proxy

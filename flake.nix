@@ -270,6 +270,7 @@
                         nginxPort
                         proxyPort
                         randomCommand
+                        upstreamHost
                         ;
                       # Vary by flavor and benchmark.
                       baselineCommand = [
