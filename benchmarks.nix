@@ -147,6 +147,7 @@ in
       { echo "timestamp_ns,status_code,latency_ns,bytes_out,bytes_in,error,response_body,attack_name,sequence_number,method,url,response_headers"
         ${lib.getExe pkgs.gzip} -d < vegeta.gz | ${lib.getExe vegeta'} encode -to=csv
       } | ${lib.getExe pkgs.xan} drop response_body,response_headers \
+        | ${lib.getExe pkgs.xan} sort --parallel --external --numeric --select=latency_ns \
         | ${lib.getExe pkgs.gzip} > "/run/benchmark/$BENCHMARK_CSV.gz"
     '';
 

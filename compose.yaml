@@ -103,6 +103,7 @@ services:
   benchmark:
     build: *scratch
     volumes:
+    - *tmp
     - *nix_store
     - type: bind
       source: ./benchmark/ # The trailing slash resolves symlinks.
