@@ -1,0 +1,58 @@
+\newcommand*{\brokenline}{%
+    \draw (0,0.25ex) +(-0.5ex,-0.5ex) -- +(0.5ex,0.5ex) +(0,0) -- (0,-0.5);
+}%
+\begin{tikzpicture}[x=8em,y=-2em,>=Stealth]
+%\node[draw,inner sep=0] at (0,0) {%
+%    \resizebox{8cm}{!}{%
+%        \includegraphics[
+%            page=5,
+%            viewport={95mm 25mm 268mm 220mm},
+%            clip,
+%        ]{sft/08-SFT-Mechanisms2.pdf}%
+%    }%
+%};
+
+\draw[fill=black!20] (0,0) rectangle +(1,1);
+\node at (0.5,0.5) {\strut execution};
+\draw    (1  ,0  ) rectangle +(1,1);
+\node at (1.5,0.5) {\strut wait for child};
+\draw (2,0) rectangle +(0.1,1);
+\draw (2.1,0) -- +(1.1,0) ++(0,1) -- +(1.1,0);
+\begin{scope}[shift={(3.2,0.5)}]
+    \brokenline
+    \begin{scope}[rotate=180]
+        \brokenline
+    \end{scope}
+\end{scope}
+\node at (2.65,0.5) {\strut wait for child};
+
+\draw[->] (1,1) -- node[left] {\manpage{2}{fork}} +(0,2);
+\fill[red!30] (1,3) rectangle +(1,1);
+\node at (1.5,3.5) {\strut execution};
+\draw (1,3) -- +(1,0) +(0,0) -- ++(0,1) -- ++(1,0);
+\begin{scope}[shift={(2,3.5)}]
+    \brokenline
+    \begin{scope}[rotate=180]
+        \brokenline
+    \end{scope}
+\end{scope}
+\draw[->] (2,3) -- node[left] {\shortstack[r]{child process\\terminates}} ++(0,-2);
+
+\draw[->] (3.2,6  ) -- node[pos=0.8,right] {\manpage{2}{kill}} (3.2,1);
+
+\draw[thick,decorate,decoration={brace, mirror}] (1,4.25) -- ++(1,0);
+\node[anchor=north] at (1.5,4.5) {\textbf{lost state}};
+
+\draw[->]             (2.1,1  ) -- node[right] {\manpage{2}{fork}} +(0,2);
+\draw[fill=black!20]  (2.1,3  ) rectangle +(1,1);
+\node              at (2.6,3.5) {\strut execution};
+\draw[fill=white]     (3.1,3  ) rectangle +(1,1);
+\node              at (3.6,3.5) {\strut wait for child};
+\node[anchor=west] at (4.1,3.5) {\ldots};
+
+\draw[->]             (3.1,4  ) -- node[left] {\manpage{2}{fork}} +(0,2);
+\draw[fill=black!20]  (3.1,6  ) rectangle +(1,1);
+\node              at (3.6,6.5) {\strut execution};
+\node[anchor=west] at (4.1,6.5) {\ldots};
+
+\end{tikzpicture}%

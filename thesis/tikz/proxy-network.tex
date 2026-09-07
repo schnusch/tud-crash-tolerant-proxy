@@ -1,0 +1,34 @@
+\begin{tikzpicture}[x=8em,y=2.5em,inner sep=0.5em,>=Stealth]
+
+\node[draw,fill=white,inner sep=1em,label=below:{Proxy}] (proxy) at (0,0) {\phantom{Proxy}};
+
+% Opaque background, see edges below.
+\node[draw,fill=white,rounded corners] (client1) at (-1, 1.5) {Client};
+\node[draw,fill=white,rounded corners] (client2) at (-1, 0.5) {Client};
+\node[rotate=90] (dots) at (-1,-0.5) {\ldots};
+\node[draw,fill=white,rounded corners] (client3) at (-1,-1.5) {Client};
+
+\node[draw,cylinder,shape border rotate=90,aspect=0.3] (db1) at (1, 1) {DB};
+\node[draw,cylinder,shape border rotate=90,aspect=0.3] (db2) at (1,-1) {DB};
+
+\begin{scope}[on background layer]
+    % Draw from center behind the nodes so it works with rounded corners.
+    \draw[->] (client1.center) -- coordinate[pos=1] (A) (proxy);
+    \draw[->] (client2.center) -- coordinate[pos=1] (B) (proxy);
+    \draw[->] (client3.center) -- coordinate[pos=1] (C) (proxy);
+\end{scope}
+\draw[->] (proxy) -- coordinate[pos=0] (X) (db1);
+\draw[->] (proxy) -- coordinate[pos=0] (Y) (db2);
+
+\draw[->,dashed] (A) -- (X);
+\draw[->,dashed] (B) -- (Y);
+\draw[->,dashed,shorten >=.5em] (C) -- (X);
+
+\begin{scope}[on background layer,rounded corners,dashed]
+    \node[fit=(client1)(client2)(client3)(proxy)(db1)(db2),inner sep=0] (all) {};
+
+    \node[draw,dashed,label=below:{\shortstack{Client-side\\Network}},fit=(proxy.west)(all.north west)(all.south west),inner sep=.5em] {};
+    \node[draw,dashed,label=below:{\shortstack{Server-side\\Network}},fit=(proxy.east)(all.north east)(all.south east),inner sep=.5em] {};
+\end{scope}
+
+\end{tikzpicture}

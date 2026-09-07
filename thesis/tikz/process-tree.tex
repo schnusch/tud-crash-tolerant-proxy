@@ -1,0 +1,65 @@
+\pgfdeclarelayer{behindbackground}
+\pgfdeclarelayer{background}
+\pgfsetlayers{behindbackground,background,main}
+
+\begin{tikzpicture}[x=16em,y=-6em,>=Stealth]
+
+\node[inner sep=0,anchor=east] (label_active) at (0,0) {\textbf{active listener}};
+\node[draw,fill=gray!30,anchor=south west] (fdtab1) at ($(label_active.south east) + (0.5em,0)$) {%
+    \shortstack[l]{%
+        \textbullet\ listening sockets\\
+        \textbullet\ IPC sockets\\
+        \textbullet\ \textbf{connection 1}\\
+        \hphantom{\textbullet\ }\vphantom{connection 1}\ldots\\
+        \textbullet\ \textbf{connection \textit{N}}%
+    }%
+};
+\node[inner sep=0,anchor=north east] (label_passive) at ({label_active.east} |- {fdtab1.north}) {\textbf{passive listener}};
+
+\begin{pgfonlayer}{background}
+    \node[draw,rounded corners,fill=white,fit=(label_active)(fdtab1.south east),inner sep=.5em] (active) {};
+    \node[draw,rounded corners,fill=white,fit=(label_passive)(fdtab1.north east),inner sep=.5em] (passive) {};
+\end{pgfonlayer}
+
+\node[inner sep=0,anchor=east] (label_worker) at (0,1) {\textbf{worker}};
+\node[draw,fill=gray!30,anchor=north west] (fdtab2) at ({fdtab1.west} |- {label_worker.north}) {
+    \shortstack[l]{%
+        \textbullet\ IPC sockets\\
+        \textbullet\ \textbf{connection 1}\\
+        \hphantom{\textbullet\ }\vphantom{connection 1}\ldots\\
+        \textbullet\ \textbf{connection \textit{N}}%
+    }%
+};
+\node[draw,rounded corners,fit=(label_worker)(fdtab2),inner sep=.5em] (worker) {};
+
+\draw[->] ({label_worker} |- {passive.south})
+    -- node[left] {\href{https://man7.org/linux/man-pages/man2/clone.2.html}{\texttt{clone(CLONE\_FILES)}}}
+    ({label_worker} |- {active.north});
+\draw[->] ({label_worker} |- {active.south})
+    -- node[left] {%
+        \shortstack[r]{%
+            \href{https://man7.org/linux/man-pages/man2/fork.2.html}{\texttt{fork()}}\\
+            \& \href{https://man7.org/linux/man-pages/man2/execve.2.html}{\texttt{execve()}}%
+        }%
+    }
+    ({label_worker} |- {worker.north});
+
+\draw[->] ({$(fdtab2) + (-0.5ex,0)$} |- {active.south})
+    --
+    ({$(fdtab2.north) + (-0.5ex,0)$} |- {worker.north});
+\draw[->] ({$(fdtab2) + (0.5ex,0)$} |- {worker.north})
+    -- node[right] {\shortstack[l]{IPC \& copy\\file descriptors}}
+    ({$(fdtab2) + (0.5ex,0)$} |- {active.south});
+
+\iftrue
+
+\node[draw,cylinder,shape border rotate=90,aspect=0.3,inner sep=.5em] (shmem) at (1,0.5) {\shortstack{shared\\memory}};
+\begin{pgfonlayer}{behindbackground}
+    \draw[->] ({fdtab1.east} |- {passive.east}) -- (shmem);
+    \draw[->] ({fdtab1.east} |- {active.east})  -- (shmem);
+\end{pgfonlayer}
+\draw[->] (worker) -- (shmem);
+
+\fi
+
+\end{tikzpicture}

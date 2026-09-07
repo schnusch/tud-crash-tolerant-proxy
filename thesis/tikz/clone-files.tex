@@ -1,0 +1,18 @@
+\begin{tikzpicture}[y=-6em,>=Stealth]
+
+\node[anchor=west,inner sep=0] (label1) at (0,0) {\textbf{process 1}};
+\node[anchor=west,inner sep=0] (label2) at (0,1) {\textbf{process 2}};
+
+\node[anchor=west] (fdtab) at ({$(label2.east) + (0.5em,0)$} |- {0,0.5}) {\shortstack{file descriptor\\table}};
+
+\begin{pgfonlayer}{background}
+    \node[draw,rounded corners,fit=(label1)({fdtab.east} |- {label1.north}),inner sep=.5em] (proc1) {};
+    \node[draw,rounded corners,fit=(label2)({fdtab.east} |- {label2.south}),inner sep=.5em] (proc2) {};
+    \node[draw,fill=gray!30,fit=({fdtab.west} |- {label1.north})({fdtab.east} |- {label2.south}),inner sep=0] {};
+\end{pgfonlayer}
+
+\draw[->] ({label2} |- {proc1.south})
+    -- node[left] {\href{https://man7.org/linux/man-pages/man2/clone.2.html}{\texttt{clone(CLONE\_FILES)}}}
+    ({label2} |- {proc2.north});
+
+\end{tikzpicture}
