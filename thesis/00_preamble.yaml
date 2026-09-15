@@ -7,7 +7,7 @@ classoption:
 - openright
 # loading "Roboto Mono" fails
 - ttfont=false
-boxlinks: true
+boxlinks: false
 csquotes: true
 mathspec: true # tudscr does not work with `unicode-math`
 
