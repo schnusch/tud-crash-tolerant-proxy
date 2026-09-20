@@ -22,8 +22,11 @@ struct fd_info {
         FD_TYPE_EVENT,
 #endif
 #ifdef FD_INFO_LISTENER
+        /** TODO */
         FD_TYPE_LISTEN,
+        /** TODO */
         FD_TYPE_PID,
+        /** TODO */
         FD_TYPE_IGNORE,
 #endif
     } type;

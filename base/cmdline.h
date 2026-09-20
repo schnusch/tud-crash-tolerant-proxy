@@ -33,7 +33,9 @@ struct cmdline_opts {
 #ifdef CMDLINE_LISTENER
     size_t num_listen_addrs;
     struct sockaddr_storage *listen_addrs;
+    /** TODO */
     int ipc_broadcast[2];
+    /** TODO */
     struct worker_process_array worker_procs;
     /** Path to the executable of the keeper. */
     const char *listener;

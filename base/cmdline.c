@@ -241,6 +241,7 @@ void free_cmdline(struct cmdline_opts *cmdline) {
     cmdline->num_listen_fds = 0;
     free(cmdline->listen_fds);
     cmdline->listen_fds = NULL;
+    // TODO munmap
 #endif
 }
 

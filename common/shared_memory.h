@@ -45,6 +45,14 @@ char *str_state(char *buf, size_t size, int state);
 /**
  * File descriptors will differ in the two processes. `fd_pair_t[0]` refers to
  * the listener's file descriptor, `fd_pair_t[1]` to the worker's.
+ *
+ * TODO
+ * ```
+ * struct fd_pair {
+ *     int listener;
+ *     int worker;
+ * };
+ * ```
  */
 typedef int fd_pair_t[2];
 
@@ -170,6 +178,10 @@ struct connection *shared_memory_get_or_append_connection(struct shared_memory_m
  */
 int shared_memory_append(struct shared_memory_mapping *map, void *entry, size_t size, size_t count);
 
+
+/**
+ * TODO
+ */
 #define connection_status_all(map, highlight) _connection_status_all(alloca(COUNT_CONNECTIONS(map) + 1), map, highlight)
 char *_connection_status_all(char *buf, struct shared_memory_mapping *map, size_t highlight);
 

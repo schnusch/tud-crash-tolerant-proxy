@@ -71,6 +71,7 @@ static int cleanup_connections(
             __attribute__((fallthrough));
         case CONN_CLOSING:
             // Close file descriptors.
+            // TODO ensure worker is no longer running
             close_connection(conn);
             char str[512];
             LOG(LOG_INFO, "slot=%zu cleaned up due to state=%s\n", slot, str_state(str, sizeof(str), state));
@@ -299,6 +300,8 @@ static int ipc_connect(const char *action, size_t slot, int fd, const char *tail
         perror("socket");
         goto error;
     }
+    // TODO async connect, pass file descriptor, then check connect error in
+    // worker process
     if(connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         perror("connect");
         closep(&fd);
@@ -452,6 +455,8 @@ int adopt_connections(int ipc_fd, struct shared_memory_mapping *map) {
             conn->downstream.tx = ATOMIC_RING_BUFFER_INIT;
             conn->upstream.rx = ATOMIC_RING_BUFFER_INIT;
             conn->upstream.tx = ATOMIC_RING_BUFFER_INIT;
+            // TODO upstream connection may be missing and the worker must send
+            // `connect ...` again.
             atomic_store_explicit(&conn->state, CONN_POLL, memory_order_release);
             __attribute__((fallthrough));
         case CONN_POLL:
