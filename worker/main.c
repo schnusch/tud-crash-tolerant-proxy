@@ -93,18 +93,17 @@ static int epoll_mod(struct context *ctx, int fd, uint32_t events) {
     if(events == info->events) {
         return 0;
     }
-    if(
-        epoll_ctl(
-            ctx->epfd,
-            events == 0 ? EPOLL_CTL_DEL : info->events == 0 ? EPOLL_CTL_ADD : EPOLL_CTL_MOD,
-            fd,
-            &(struct epoll_event){
-                .events = events,
-                .data.fd = fd,
-            }
-        ) < 0
-    ) {
-        return -1;
+    int op = events == 0 ? EPOLL_CTL_DEL : info->events == 0 ? EPOLL_CTL_ADD : EPOLL_CTL_MOD;
+    struct epoll_event *ev = op == EPOLL_CTL_DEL ? NULL : &(struct epoll_event){
+        .events = events,
+        .data.fd = fd,
+    };
+    while(epoll_ctl(ctx->epfd, op, fd, ev) < 0) {
+        if(errno == EEXIST && op == EPOLL_CTL_ADD) {
+            op = EPOLL_CTL_MOD;
+        } else {
+            return -1;
+        }
     }
     info->events = events;
     return 0;
