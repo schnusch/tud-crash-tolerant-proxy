@@ -68,9 +68,15 @@ static int kill_active(pid_t active_pid, struct worker_process_array *worker_pro
         if(proc->pid < 0) {
             continue;
         }
+#ifdef FORK_NOT_CLONE
+        if(kill(proc->pid, signal) < 0) {
+            r = -1;
+        }
+#else
         if(proc->pid_fd >= 0 && pidfd_send_signal(proc->pid_fd, signal, NULL, 0) < 0) {
             r = -1;
         }
+#endif
     }
 
     return r;
@@ -275,6 +281,9 @@ int main_passive(int argc, char **argv) {
     }
 
     while(1) {
+#ifdef FORK_NOT_CLONE
+        pid_t active_pid = fork();
+#else
         // clone3 allocates its own stack unless CLONE_VM is specified.
         // valgrind does not implement clone3.
         // https://bugs.kde.org/show_bug.cgi?id=420906
@@ -283,6 +292,7 @@ int main_passive(int argc, char **argv) {
             .exit_signal = SIGCHLD,
         };
         pid_t active_pid = clone3(&cl_args, sizeof(cl_args));
+#endif
         if(active_pid < 0) {
             perror("clone");
             return 1;
