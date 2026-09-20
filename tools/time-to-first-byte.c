@@ -37,6 +37,11 @@ int create_listen_sock(struct sockaddr *addr, socklen_t len) {
 }
 
 int main(int argc, char **argv) {
+    // Reserve a low file descriptor for select(2).
+    int low_fd = dup(STDIN_FILENO);
+    ASSERT_PERROR(low_fd >= 0);
+    assert(low_fd < FD_SETSIZE);
+
     struct sockaddr_in listen_addr = {
         .sin_family = AF_INET,
         .sin_addr = { .s_addr = INADDR_ANY },
@@ -129,6 +134,11 @@ int main(int argc, char **argv) {
     // Send a single byte.
     ASSERT_PERROR(shutdown(conn_out, SHUT_WR) == 0);
     ASSERT_PERROR(shutdown(conn_in, SHUT_RD) == 0);
+
+    // select(2) on a low file descriptor.
+    ASSERT_PERROR(dup2(conn_out, low_fd) >= 0);
+    close(conn_out);
+    conn_out = low_fd;
 
     struct timeval result = {
         .tv_sec = 5,
