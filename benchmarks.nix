@@ -4,6 +4,10 @@
   self,
 }:
 let
+  timeToFirstByte = pkgs.writeCBin "time-to-first-byte" ''
+    #include "${self.outPath}/tools/time-to-first-byte.c"
+  '';
+
   injectPGid = pkgs.writeShellScript "inject" ''
     set -euo pipefail
     group="$1"
@@ -25,15 +29,20 @@ let
   '';
 
   inject = crash: {
-    upstreamHost = "random.";
+    upstreamHost = "benchmark.";
     benchmarkScript = ''
       PS4='$ '
       set -x
-      exec ${lib.getExe (pkgs.python3.withPackages (ps: [ ps.numpy ]))} \
-        ${self.outPath}/tools/idle.py \
-        -c"$BENCHMARK_PARALLEL" \
-        -t6 \
-        "$BENCHMARK_HOST" 80
+
+      ${lib.getExe' pkgs.binutils "objdump"} -d -M intel ${lib.getExe timeToFirstByte}
+
+      while ! host=$(${lib.getExe' pkgs.glibc.getent "getent"} hosts "$BENCHMARK_HOST"); do
+        ${lib.getExe' pkgs.coreutils "sleep"} .1
+      done
+      host="''${host%% *}"
+
+      ${lib.getExe' pkgs.coreutils "sleep"} 1
+      exec ${lib.getExe timeToFirstByte} "$host" "''${BENCHMARK_PARALLEL:?}" 3 > "/run/benchmark/''${BENCHMARK_CSV:?}"
     '';
     background = pkgs.writeShellScript "background" ''
       PS4='$ '
@@ -83,31 +92,25 @@ in
 
   first-byte = {
     upstreamHost = "benchmark.";
-    benchmarkScript =
-      let
-        timeToFirstByte = pkgs.writeCBin "time-to-first-byte" ''
-          #include "${self.outPath}/tools/time-to-first-byte.c"
-        '';
-      in
-      ''
-        PS4='$ '
-        set -x
+    benchmarkScript = ''
+      PS4='$ '
+      set -x
 
-        while ! host=$(${lib.getExe' pkgs.glibc.getent "getent"} hosts "$BENCHMARK_HOST"); do
-          ${lib.getExe' pkgs.coreutils "sleep"} .1
+      while ! host=$(${lib.getExe' pkgs.glibc.getent "getent"} hosts "$BENCHMARK_HOST"); do
+        ${lib.getExe' pkgs.coreutils "sleep"} .1
+      done
+      host="''${host%% *}"
+
+      while ! ${lib.getExe pkgs.strace} ${lib.getExe timeToFirstByte} "$host"; do
+        ${lib.getExe' pkgs.coreutils "sleep"} .1
+      done
+
+      { echo "time,select"
+        for i in $(${lib.getExe' pkgs.coreutils "seq"} "$BENCHMARK_REQUESTS"); do
+          ${lib.getExe timeToFirstByte} "$host"
         done
-        host="''${host%% *}"
-
-        while ! ${lib.getExe pkgs.strace} ${lib.getExe timeToFirstByte} "$host"; do
-          ${lib.getExe' pkgs.coreutils "sleep"} .1
-        done
-
-        { echo "time,select"
-          for i in $(${lib.getExe' pkgs.coreutils "seq"} "$BENCHMARK_REQUESTS"); do
-            ${lib.getExe timeToFirstByte} "$host"
-          done
-        } | ${lib.getExe' pkgs.coreutils "tee"} "/run/benchmark/$BENCHMARK_CSV"
-      '';
+      } | ${lib.getExe' pkgs.coreutils "tee"} "/run/benchmark/$BENCHMARK_CSV"
+    '';
   };
 
   random = {
@@ -120,6 +123,13 @@ in
         -n"$BENCHMARK_REQUESTS" \
         -c"$BENCHMARK_PARALLEL" \
         "$BENCHMARK_HOST" 80
+    '';
+    background = pkgs.writeShellScript "background" ''
+      PS4='$ '
+      set -eux
+      ${lib.getExe' pkgs.coreutils "sleep"} 3
+      ${lib.getExe' pkgs.procps "ps"} -A
+      exec ${injectPGid} "$(< /run/proxy.pgid)"
     '';
   };
 

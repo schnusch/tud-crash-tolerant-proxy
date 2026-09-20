@@ -46,6 +46,10 @@ struct connection *accept_connection(struct shared_memory_mapping *map, int list
         )
     );
 
+    assert(conn->downstream.fd[0] < 0);
+    assert(conn->downstream.fd[1] < 0);
+    assert(conn->upstream.fd[0] < 0);
+    assert(conn->upstream.fd[1] < 0);
     LOG(LOG_DEBUG_BYTES, "slot=%zu accept(%d, ...)\n", conn - map->addr->connections, listen_fd);
 
     // Accept connection.

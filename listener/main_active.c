@@ -440,6 +440,8 @@ int adopt_connections(int ipc_fd, struct shared_memory_mapping *map) {
             conn->upstream.fd[0],
             state
         );
+        conn->downstream.fd[1] = -1;
+        conn->upstream.fd[1] = -1;
         int e = 0;
         switch(state & CONN_STATE_BITS) {
         case CONN_CONNECTING:

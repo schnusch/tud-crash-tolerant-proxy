@@ -207,6 +207,9 @@ struct connection *shared_memory_get_or_append_connection(struct shared_memory_m
             map,
             &(struct connection){
                 .state = CONN_UNUSED,
+                .worker_pid = -1,
+                .downstream = (struct connection_endpoint){ .fd = { -1, -1 } },
+                .upstream   = (struct connection_endpoint){ .fd = { -1, -1 } },
             },
             sizeof(struct connection),
             slot + 1 - current_length

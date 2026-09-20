@@ -524,6 +524,7 @@ static int ipc_connected(const char *action, size_t slot, int fd, const char *ta
     conn->downstream.tx = ATOMIC_RING_BUFFER_INIT;
     conn->upstream.rx = ATOMIC_RING_BUFFER_INIT;
     conn->upstream.tx = ATOMIC_RING_BUFFER_INIT;
+    assert(conn->upstream.fd[1] < 0);
     conn->upstream.fd[1] = fd;
 
     struct fd_info *info;
@@ -665,6 +666,7 @@ static int ipc_accepted(const char *action, size_t slot, int fd, const char *tai
     assert(conn);
 
     conn->worker_pid = getpid();
+    assert(conn->downstream.fd[1] < 0);
     conn->downstream.fd[1] = fd;
     change_state(slot, conn, &conn->state, CONN_CONNECTING);
 
@@ -742,6 +744,7 @@ static int ipc_orphan_downstream(const char *action, size_t slot, int fd, const 
     assert(conn);
 
     conn->worker_pid = getpid();
+    assert(conn->downstream.fd[1] < 0);
     conn->downstream.fd[1] = fd;
     if(ipc_send(ctx->ipc_fd, "orphan_up", slot, -1, NULL) < 0) {
         perror("ipc_send");
@@ -782,6 +785,7 @@ static int ipc_orphan_upstream(const char *action, size_t slot, int fd, const ch
     assert(conn);
 
     conn->worker_pid = getpid();
+    assert(conn->upstream.fd[1] < 0);
     conn->upstream.fd[1] = fd;
 
     LOG(LOG_ERROR, "slot=%zu %d" UTF8_ARROW_EAST "%d orphaned connection received\n", slot, conn->downstream.fd[1], conn->upstream.fd[1]);
