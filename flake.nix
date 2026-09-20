@@ -270,7 +270,6 @@
                         nginxPort
                         proxyPort
                         randomCommand
-                        upstreamHost
                         ;
                       # Vary by flavor and benchmark.
                       baselineCommand = [
@@ -305,6 +304,36 @@
                           + benchmarkScript
                         )
                       ];
+                      haproxyDockerfile = ''
+                        FROM docker.io/library/haproxy:3.3-alpine3.24
+                        COPY <<EOF /usr/local/etc/haproxy/haproxy.cfg
+                        global
+                            nbthread 1
+                        ${
+                          if name == "transform_nop" then
+                            ''
+                              listen proxy
+                                  mode tcp
+                                  bind :80
+                                  server nginx ${upstreamHost}:80
+                            ''
+                          else
+                            ''
+                              listen proxy
+                                  mode http
+                                  bind :80
+                                  server nginx ${upstreamHost}:80
+                                  http-request set-header Connection "close"
+                                  http-request set-header User-Agent "HAProxy"
+                                  http-request set-header DNT "1"
+                                  http-request set-header Sec-GPC "1"
+                                  http-response set-header Connection "close"
+                                  http-response set-header Server "HAProxy"
+                                  http-response set-header X-Clacks-Overhead "GNU Terry Pratchett"
+                                  http-response set-header X-Proxy-PID "0"
+                            ''
+                        }EOF
+                      '';
                     };
                   }
                 )
