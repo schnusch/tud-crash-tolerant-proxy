@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/epoll.h>
+#include <sys/ioctl.h>
 #include <sys/signalfd.h>
 #include <unistd.h>
 
@@ -959,6 +960,14 @@ int main(int argc, char **argv) {
         perror("epoll_create1");
         return 1;
     }
+    struct epoll_params ep;
+    if(ioctl(ctx.epfd, EPIOCGPARAMS, &ep) < 0) {
+        perror("ioctl(EPIOCGPARAMS)");
+        return 1;
+    }
+    LOG(LOG_INFO, "busy_poll_usecs  = %d\n", (int)ep.busy_poll_usecs);
+    LOG(LOG_INFO, "busy_poll_budget = %d\n", (int)ep.busy_poll_budget);
+    LOG(LOG_INFO, "prefer_busy_poll = %d\n", (int)ep.prefer_busy_poll);
     struct fd_info *info;
 
 #ifdef PERFORMANCE_BASELINE
