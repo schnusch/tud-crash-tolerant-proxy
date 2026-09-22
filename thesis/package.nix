@@ -1,6 +1,7 @@
 {
   lib,
   stdenvNoCC,
+  fetchurl,
   pandoc,
   qpdf,
   texliveFull,
@@ -27,6 +28,12 @@ stdenvNoCC.mkDerivation {
   ];
 
   preBuild = ''
+    ln -fs ${
+      fetchurl {
+        url = "https://pandoc.org/demo/ieee.csl";
+        hash = "sha256:9b023e1b62d7459fefe7f989fbc6be1d54638952ab2581111b5895de0aa444e1";
+      }
+    } ieee.csl
     export HOME=$(mktemp -d)
   ''
   + lib.optionalString (date != null) ''

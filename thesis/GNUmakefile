@@ -63,13 +63,20 @@ PANDOC_CMD = \
 		--include-in-header=$< \
 		- $(SRCS)
 
-tmp/tex/$(NAME).tex: $(TEX_ONLY_SRCS) defaults.yaml citations.bib $(FILTERS) $(SRCS)
+tmp/tex/$(NAME).tex: $(TEX_ONLY_SRCS) defaults.yaml ieee.csl citations.bib $(FILTERS) $(SRCS)
 	@mkdir -p $(@D)
 	$(PANDOC_CMD)
 
-out/$(NAME)/index.html: $(HTML_ONLY_SRCS) defaults.yaml citations.bib $(FILTERS) $(SRCS) $(TIKZ_SVGS)
+out/$(NAME)/index.html: $(HTML_ONLY_SRCS) defaults.yaml ieee.csl citations.bib $(FILTERS) $(SRCS)
 	@mkdir -p $(@D)
 	$(PANDOC_CMD)
+
+# misc
+
+ieee.csl:
+	wget -O $@.tmp https://pandoc.org/demo/ieee.csl || curl -Lfo $@.tmp https://pandoc.org/demo/ieee.csl
+	echo '9b023e1b62d7459fefe7f989fbc6be1d54638952ab2581111b5895de0aa444e1  $@.tmp' | sha256sum -c
+	mv $@.tmp $@
 
 # standalone TikZ images
 

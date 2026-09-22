@@ -1,5 +1,7 @@
 ---
 top-level-division: chapter
+csl: ieee.csl
+
 toc: true
 toc-depth: 4
 number-sections: true
