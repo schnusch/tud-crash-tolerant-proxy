@@ -746,9 +746,17 @@ static int ipc_orphan_downstream(const char *action, size_t slot, int fd, const 
     conn->worker_pid = getpid();
     assert(conn->downstream.fd[1] < 0);
     conn->downstream.fd[1] = fd;
-    if(ipc_send(ctx->ipc_fd, "orphan_up", slot, -1, NULL) < 0) {
-        perror("ipc_send");
-        return -2;
+
+    if(atomic_load_explicit(&conn->state, memory_order_acquire) == CONN_CONNECTING) {
+        if(indirect_connect(ctx, slot) < 0) {
+            perror("indirect_connect");
+            return -2;
+        }
+    } else {
+        if(ipc_send(ctx->ipc_fd, "orphan_up", slot, -1, NULL) < 0) {
+            perror("ipc_send");
+            return -2;
+        }
     }
     return 0;
 }

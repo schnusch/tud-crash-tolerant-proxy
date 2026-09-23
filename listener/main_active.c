@@ -455,8 +455,6 @@ int adopt_connections(int ipc_fd, struct shared_memory_mapping *map) {
             conn->downstream.tx = ATOMIC_RING_BUFFER_INIT;
             conn->upstream.rx = ATOMIC_RING_BUFFER_INIT;
             conn->upstream.tx = ATOMIC_RING_BUFFER_INIT;
-            // TODO upstream connection may be missing and the worker must send
-            // `connect ...` again.
             atomic_store_explicit(&conn->state, CONN_POLL, memory_order_release);
             __attribute__((fallthrough));
         case CONN_POLL:
