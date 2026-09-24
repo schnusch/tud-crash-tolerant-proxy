@@ -140,25 +140,34 @@ in
       });
     in
     ''
+      export PATH=${
+        lib.makeBinPath [
+          vegeta'
+          pkgs.xan
+          pkgs.gzip
+          pkgs.coreutils
+        ]
+      }
       PS4='$ '
       set -x
-      ${lib.getExe vegeta'} attack \
+      vegeta attack \
           -connections="$BENCHMARK_PARALLEL" \
           -max-connections="$BENCHMARK_PARALLEL" \
           -workers="$(($BENCHMARK_PARALLEL * 2))" \
           -max-workers="$(($BENCHMARK_PARALLEL * 2))" \
           -rate=0 \
           -duration="''${BENCHMARK_DURATION}s" << eof \
-        | ${lib.getExe pkgs.gzip} --fast \
+        | gzip --fast \
         > vegeta.gz
       GET http://$BENCHMARK_HOST/$BENCHMARK_FILE
       eof
-      ${lib.getExe' pkgs.coreutils "ls"} -dhlp vegeta.gz
+      ls -dhlp vegeta.gz
       { echo "timestamp_ns,status_code,latency_ns,bytes_out,bytes_in,error,response_body,attack_name,sequence_number,method,url,response_headers"
-        ${lib.getExe pkgs.gzip} -d < vegeta.gz | ${lib.getExe vegeta'} encode -to=csv
-      } | ${lib.getExe pkgs.xan} drop response_body,response_headers \
-        | ${lib.getExe pkgs.xan} sort --parallel --external --numeric --select=latency_ns \
-        | ${lib.getExe pkgs.gzip} > "/run/benchmark/$BENCHMARK_CSV.gz"
+        gzip -d < vegeta.gz | vegeta encode -to=csv
+      } | xan drop response_body,response_headers \
+        | xan sort --parallel --external --numeric --select=latency_ns \
+        | gzip \
+        > "/run/benchmark/$BENCHMARK_CSV.gz"
     '';
 
   wrk.benchmarkScript = ''
