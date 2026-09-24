@@ -145,11 +145,23 @@ in
           vegeta'
           pkgs.xan
           pkgs.gzip
+          pkgs.netcat
+          pkgs.glibc.getent
           pkgs.coreutils
         ]
       }
       PS4='$ '
       set -x
+
+      while ! host=$(getent hosts "$BENCHMARK_HOST"); do
+        sleep .1
+      done
+      host="''${host%% *}"
+
+      while ! nc -z "$host" 80; do
+        sleep .1
+      done
+
       vegeta attack \
           -connections="$BENCHMARK_PARALLEL" \
           -max-connections="$BENCHMARK_PARALLEL" \
@@ -159,7 +171,7 @@ in
           -duration="''${BENCHMARK_DURATION}s" << eof \
         | gzip --fast \
         > vegeta.gz
-      GET http://$BENCHMARK_HOST/$BENCHMARK_FILE
+      GET http://$host/$BENCHMARK_FILE
       eof
       ls -dhlp vegeta.gz
       { echo "timestamp_ns,status_code,latency_ns,bytes_out,bytes_in,error,response_body,attack_name,sequence_number,method,url,response_headers"
