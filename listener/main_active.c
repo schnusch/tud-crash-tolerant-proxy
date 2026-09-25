@@ -439,13 +439,22 @@ void cleanup_worker_process(struct worker_process *proc, struct shared_memory_ma
 /**
  * Pass orphaned connections to `ipc_fd`.
  */
-int adopt_connections(int ipc_fd, struct shared_memory_mapping *map) {
+int adopt_one_connection(int ipc_fd, struct shared_memory_mapping *map, size_t *next_adopted) {
+    if(*next_adopted == -1) {
+        return 0;
+    }
+
+    size_t slot = -2;
     FOREACH_CONNECTION(conn, map) {
         int state = atomic_load_explicit(&conn->state, memory_order_acquire);
         if(state == CONN_UNUSED || conn->worker_pid >= 0) {
             continue;
         }
-        size_t slot = conn - map->addr->connections;
+        slot = conn - map->addr->connections;
+        if(slot < *next_adopted) {
+            continue;
+        }
+
         LOG(
             LOG_INFO,
             "slot=%zu %d" UTF8_ARROW_EAST "%d: distributing orphaned connection (0x%X)\n",
@@ -489,7 +498,10 @@ int adopt_connections(int ipc_fd, struct shared_memory_mapping *map) {
             perror("ipc_send");
             return -1;
         }
+
+        break;
     }
+    *next_adopted = slot + 1;
     return 0;
 }
 
@@ -696,6 +708,18 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
         return 1;
     }
 
+    // Poll ipc_broadcast socket.
+    if(
+        worker_process_epoll_add(
+            &ctx,
+            cmdline->ipc_broadcast[1],
+            EPOLLOUT,
+            &(struct fd_info){ .type = FD_TYPE_IPC, .slot = -1 }
+        ) < 0
+    ) {
+        return 1;
+    }
+
     // Poll listening file descriptors.
     for(size_t i = 0; i < cmdline->num_listen_fds; ++i) {
         if(
@@ -710,10 +734,7 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
         }
     }
 
-    // Distribute orphaned connections to workers.
-    if(adopt_connections(cmdline->ipc_broadcast[1], map) < 0) {
-        return 1;
-    }
+    size_t next_adopted = 0;
 
     while(1) {
         struct epoll_event evs[16];
@@ -746,27 +767,35 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
                 }
                 break;
             case FD_TYPE_IPC:
-                // Handle incoming IPC message.
-                switch(
-                    ipc_process_incoming(
-                        fd,
-                        ipc_methods,
-                        &(struct ipc_context){
-                            .map = map,
-                            .ipc_fd = evs[i].data.fd,
-                        }
-                    )
-                ) {
-                case 0:
-                    // Success.
-                    break;
-                case -1:
-                    // Error in ipc_process_incoming itself.
-                    perror("ipc_process_incoming");
-                    return 1;
-                default:
-                    // Error in an IPC method.
-                    return 1;
+                if(fd == cmdline->ipc_broadcast[1] && (evs[i].events & EPOLLOUT)) {
+                    // Sending out the IPC broadcast socket is now possible.
+                    // Distribute a single orphaned connections to workers.
+                    if(adopt_one_connection(cmdline->ipc_broadcast[1], map, &next_adopted) < 0) {
+                        return 1;
+                    }
+                } else {
+                    // Handle incoming IPC message.
+                    switch(
+                        ipc_process_incoming(
+                            fd,
+                            ipc_methods,
+                            &(struct ipc_context){
+                                .map = map,
+                                .ipc_fd = evs[i].data.fd,
+                            }
+                        )
+                    ) {
+                    case 0:
+                        // Success.
+                        break;
+                    case -1:
+                        // Error in ipc_process_incoming itself.
+                        perror("ipc_process_incoming");
+                        return 1;
+                    default:
+                        // Error in an IPC method.
+                        return 1;
+                    }
                 }
                 break;
             case FD_TYPE_PID:
@@ -804,15 +833,10 @@ int main_active(struct cmdline_opts *cmdline, struct shared_memory_mapping *map,
                     );
                     cleanup_worker_process(proc, map);
 
+                    next_adopted = 0;
+
                     // Start new worker process.
                     if(worker_process_spawn(&ctx, proc, info->slot, cmdline, cmdline->ipc_broadcast[0]) < 0) {
-                        return 1;
-                    }
-                    // Orphaned connections will now be pushed on the broadcast
-                    // IPC socket. So they could end up with any (not only the
-                    // newly started) worker. (Could just be changed to
-                    // `proc->ipc_fd`.)
-                    if(adopt_connections(cmdline->ipc_broadcast[1], map) < 0) {
                         return 1;
                     }
                 }
