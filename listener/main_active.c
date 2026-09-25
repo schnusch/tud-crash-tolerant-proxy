@@ -115,6 +115,14 @@ int recover_one_fd(struct fd_info **known_fds, size_t *num_known_fds) {
         perror("opendir");
         return -1;
     }
+
+    // opendir(3) opens it own file descriptor. If FD_CLOEXEC is set the loop
+    // will close it, so register it explicitly.
+    int dir_fd = dirfd(d);
+    struct fd_info *dir_info = fd_info_get(known_fds, num_known_fds, dir_fd);
+    assert(dir_info);
+    *dir_info = (struct fd_info){ .type = FD_TYPE_IGNORE };
+
     size_t num_unknown_fds = 0;
     int unknown_fd = -1;
     struct dirent *e;
@@ -185,6 +193,9 @@ int recover_one_fd(struct fd_info **known_fds, size_t *num_known_fds) {
         ++num_unknown_fds;
     }
     closedir(d);
+
+    // Unregister file descriptor closed by closedir(3).
+    dir_info->type = FD_TYPE_UNKNOWN;
 
     return unknown_fd;
 }
