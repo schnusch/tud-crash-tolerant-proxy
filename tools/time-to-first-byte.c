@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -83,12 +84,18 @@ int main(int argc, char **argv) {
 
     // Sleep before creating final connection.
     if(argc > 3) {
-        struct timespec t = { .tv_nsec = 0 };
-        errno = 0;
-        t.tv_sec = strtol(argv[3], NULL, 0);
-        ASSERT_PERROR(errno == 0);
-        while(nanosleep(&t, &t) < 0) {
-            ASSERT_PERROR(errno == EINTR);
+        while(1) {
+            struct stat st;
+            fprintf(stderr, "stat %s\n", argv[3]);
+            if(stat(argv[3], &st) < 0) {
+                if(errno == ENOENT) {
+                    sleep(1);
+                    continue;
+                }
+                perror("stat");
+                abort();
+            }
+            break;
         }
     }
 

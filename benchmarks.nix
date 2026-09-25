@@ -42,12 +42,13 @@ let
       host="''${host%% *}"
 
       ${lib.getExe' pkgs.coreutils "sleep"} 1
-      exec ${lib.getExe timeToFirstByte} "$host" "''${BENCHMARK_PARALLEL:?}" 3 > "/run/benchmark/''${BENCHMARK_CSV:?}"
+      (${lib.getExe' pkgs.coreutils "sleep"} 6 && ${lib.getExe' pkgs.coreutils "touch"} /run/injected) &
+      exec ${lib.getExe timeToFirstByte} "$host" "''${BENCHMARK_PARALLEL:?}" /run/injected > "/run/benchmark/''${BENCHMARK_CSV:?}"
     '';
     background = pkgs.writeShellScript "background" ''
       PS4='$ '
       set -eux
-      ${lib.getExe' pkgs.coreutils "sleep"} 3
+      ${lib.getExe' pkgs.coreutils "sleep"} 5
 
       : "Before error injection:"
       ${lib.getExe' pkgs.psmisc "pstree"} --unicode --long --show-pids --show-pgids 1
