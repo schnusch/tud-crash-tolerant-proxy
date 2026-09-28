@@ -98,6 +98,20 @@ tmp/html/tikz/%.tex: tikz/%.tex tikz/include/head.tex noto.tex
 	} > $@.tmp
 	mv $@.tmp $@
 
-# podman-compose
+# byte latency
 
-tmp/tex/$(NAME).pdf $(patsubst %,tmp/html/%,$(wildcard tikz/veth*.tex)): tikz/include/veth.tex
+tmp/html/tikz/first-byte.tex: \
+		data/first-haproxy-data.csv \
+		data/first-baseline-data.csv \
+		data/first-proxy-data.csv
+
+data/%-data.csv: data/%.csv tools/median.py
+	./tools/median.py < $(@:-data.csv=.csv) > $@.tmp 3> $(@:-data.csv=-median.tex)
+	mv $@.tmp $@
+
+data/first-haproxy.csv \
+data/first-baseline.csv \
+data/first-proxy.csv:
+	@mkdir -p $(@D)
+	scp -p 141.76.48.110:tud-crash-tolerant-proxy/benchmark/$(@F) $@.tmp
+	mv $@.tmp $@

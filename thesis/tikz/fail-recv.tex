@@ -1,0 +1,46 @@
+\begin{tikzpicture}
+\path[draw=none,fill=black,fill opacity=0] (12cm,0) +(2cm,0) -- (-2cm,0);
+\begin{axis}[
+    % chart size
+    scale only axis,
+    width=12cm,
+    height=7cm,
+    % styling
+    grid=major,
+    xlabel style={name=xlabel},
+    legend style={anchor=north,at=(xlabel.south)},
+    legend cell align=left,
+    % X axis
+    xlabel={Active connections},
+    xticklabel={\pgfmathprintnumber[assume math mode,fixed]{\tick}},
+    xticklabel style={rotate=45,anchor=north east},
+    scaled x ticks=false,
+    xmin=0,
+    enlarge x limits=0.0,
+    % Y axis
+    ylabel={byte round-trip},
+    ymin=0,
+    ymax=300,
+    yticklabel={\pgfmathprintnumber[assume math mode,fixed]{\tick}\,µs},
+    scaled y ticks=false,
+]
+
+\addplot+[
+    only marks,
+    mark=x,
+    color=red!75!black,
+    forget plot,
+] table[
+    x=x,
+    y=y,
+    col sep=comma,
+]{data/fail-recv-data.csv};
+\addplot table[
+    x=concurrent,
+    y={create col/linear regression={}},
+    col sep=comma,
+    color=red!75!black,
+]{data/fail-recv-data.csv};
+
+\end{axis}
+\end{tikzpicture}
