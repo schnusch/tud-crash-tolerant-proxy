@@ -2,3 +2,7 @@
 /flake.lock
 /out
 /tmp
+*.aux
+*.fdb_latexmk
+*.fls
+*.log

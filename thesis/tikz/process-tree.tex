@@ -2,13 +2,15 @@
 \pgfdeclarelayer{background}
 \pgfsetlayers{behindbackground,background,main}
 
-\begin{tikzpicture}[x=16em,y=-6em,>=Stealth]
+\begin{tikzpicture}[>=Stealth]
 
-\node[inner sep=0,anchor=east] (label_active) at (0,0) {\textbf{active listener}};
+\node[inner sep=0,anchor=east] (label_active) at (0,0) {\phantom{\textbf{passive listener}}};
+\node[inner sep=0] at (label_active) {\textbf{active listener}};
 \node[draw,fill=gray!30,anchor=south west] (fdtab1) at ($(label_active.south east) + (0.5em,0)$) {%
     \shortstack[l]{%
         \textbullet\ listening sockets\\
         \textbullet\ IPC sockets\\
+        \textbullet\ \textbf{shared memory}\\
         \textbullet\ \textbf{connection 1}\\
         \hphantom{\textbullet\ }\vphantom{connection 1}\ldots\\
         \textbullet\ \textbf{connection \textit{N}}%
@@ -21,10 +23,12 @@
     \node[draw,rounded corners,fill=white,fit=(label_passive)(fdtab1.north east),inner sep=.5em] (passive) {};
 \end{pgfonlayer}
 
-\node[inner sep=0,anchor=east] (label_worker) at (0,1) {\textbf{worker}};
+\node[inner sep=0,anchor=east] (label_worker) at (0,-6em) {\phantom{\textbf{passive listener}}};
+\node[inner sep=0] at (label_worker) {\textbf{worker}};
 \node[draw,fill=gray!30,anchor=north west] (fdtab2) at ({fdtab1.west} |- {label_worker.north}) {
     \shortstack[l]{%
         \textbullet\ IPC sockets\\
+        \textbullet\ \textbf{shared memory}\\
         \textbullet\ \textbf{connection 1}\\
         \hphantom{\textbullet\ }\vphantom{connection 1}\ldots\\
         \textbullet\ \textbf{connection \textit{N}}%
@@ -53,7 +57,21 @@
 
 \iftrue
 
-\node[draw,cylinder,shape border rotate=90,aspect=0.3,inner sep=.5em] (shmem) at (1,0.5) {\shortstack{shared\\memory}};
+\node[
+    inner sep=.5em,
+    path picture={
+        \draw
+            ($(path picture bounding box.north east) + (-.5\pgflinewidth,-.5\pgflinewidth)$)
+            ++(-1em,0)
+            -- ++(0,-1em)
+            -- ++(1em,0)
+            -- ++(-1em,1em)
+            -- ($(path picture bounding box.north west) + (.5\pgflinewidth,-.5\pgflinewidth)$)
+            -- ($(path picture bounding box.south west) + (.5\pgflinewidth,.5\pgflinewidth)$)
+            -- ($(path picture bounding box.south east) + (-.5\pgflinewidth,.5\pgflinewidth)$)
+            -- ($(path picture bounding box.north east) + (-.5\pgflinewidth,-.5\pgflinewidth) + (0,-1em)$);
+    },
+] (shmem) at (16em,-3em) {\shortstack{\strut\\shared\\memory\\\strut}};
 \begin{pgfonlayer}{behindbackground}
     \draw[->] ({fdtab1.east} |- {passive.east}) -- (shmem);
     \draw[->] ({fdtab1.east} |- {active.east})  -- (shmem);

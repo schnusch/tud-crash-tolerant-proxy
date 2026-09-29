@@ -1,0 +1,23 @@
+\begin{tikzpicture}[x=9em,y=-4em,inner sep=0.5em,>=Stealth,anchor=base]
+
+\node[draw] (benchmark) at (0,1) {Benchmark};
+
+\begin{scope}[color=red!75!black]
+\node[draw] (proxy) at (-1,0) {crash-tolerant variant};
+\draw[->,transform canvas={xshift=-1ex}] (benchmark) -- (proxy);
+\draw[->,transform canvas={xshift=1ex}]  (proxy)     -- (benchmark);
+\end{scope}
+
+\begin{scope}[color=orange!75!black]
+\node[draw] (haproxy) at (0,0) {HAProxy};
+\draw[->,transform canvas={xshift=-.5ex}] (benchmark) -- (haproxy);
+\draw[->,transform canvas={xshift=.5ex}]  (haproxy)   -- (benchmark);
+\end{scope}
+
+\begin{scope}[color=blue!75!black]
+\node[draw] (baseline) at (1,0) {baseline variant};
+\draw[->,transform canvas={xshift=-1ex}] (benchmark) -- (baseline);
+\draw[->,transform canvas={xshift=1ex}]  (baseline)  -- (benchmark);
+\end{scope}
+
+\end{tikzpicture}%

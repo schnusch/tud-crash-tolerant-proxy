@@ -3,7 +3,7 @@ function Code(elem)
         return nil
     end
 
-    local name, section = elem.text:match("^([%w_]+)%((%d+)%)$")
+    local name, section = elem.text:match("^([%w_-]+)%((.+)%)$")
     if not name then
         return nil
     end

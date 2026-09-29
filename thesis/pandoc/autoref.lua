@@ -3,18 +3,26 @@ function RawInline(elem)
         return nil
     end
 
-    local ref = elem.text:match("^\\autoref{(.*)}$")
-    if not ref then
+    local type = nil
+    local ref = nil
+    for _, pattern in ipairs({
+        "^(\\[Cc]ref){(.*)}$",
+        "^(\\[Ff]ullref){(.*)}$",
+        "^(\\nameref){(.*)}$",
+    }) do
+        type, ref = elem.text:match(pattern)
+        if type ~= nil then
+            break
+        end
+    end
+    if type == nil or ref == nil then
         return nil
     end
 
-    ref = "#" .. ref
     return pandoc.Link(
         {
-            pandoc.Str("ref"),
-            pandoc.Space(),
-            pandoc.Code(ref),
+            pandoc.Code(type .. "{" .. ref .. "}", { class = "latetx" }),
         },
-        ref
+        "#" .. ref
     )
 end

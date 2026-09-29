@@ -1,0 +1,40 @@
+\providecommand*{\tikzargs}{x=14em,y=-4em}
+\providecommand*{\nodestyle}{rounded corners}
+\providecommand*{\ipcmsgclose}{\texttt{"close slot=\%d"}}%
+\providecommand*{\nodetext}[1]{#1}%
+\newcommand*{\ipcpath}[4]{%
+    \draw[->] (#1) -- (#2);
+    \path (#1.center) -- node[#3] {#4} (#2.center);
+}
+
+\def \tempa {\begin{tikzpicture}}%
+\expandafter \tempa
+\expandafter [\tikzargs,>=Stealth]
+
+\node[anchor=south,inner sep=0] (listener) at (0,1em) {\textbf{Listener}};
+\node[anchor=south,inner sep=0]            at (1,1em) {\textbf{Worker}};
+
+\node[circle,fill,inner sep=.2em] (start) at (1,0) {};
+
+\node[\nodestyle,draw,inner sep=.5em] (w_closing) at (1,1) {%
+    \nodetext{%
+        \texttt{state := CONN\_CLOSING}%
+    }%
+};
+\node[circle,draw,inner sep=.5em] (w_closed) at (1,2) {};
+
+\node[\nodestyle,draw,inner sep=.5em] (l_closing) at (0,3) {};
+\node[\nodestyle,draw,double,inner sep=.5em] (l_closed) at (0,4) {
+    \nodetext{%
+        \texttt{state := CONN\_UNUSED}%
+    }%
+};
+
+\draw[dashed] ({0.5,0} |- {listener.north}) -- ({0.5,0} |- {l_closed.south});
+
+\draw[->] (start)     -- (w_closing);
+\draw[->] (w_closing) -- node[right]       {\manpage{2}{close}} (w_closed);
+\ipcpath{w_closed}{l_closing}{below right}{\ipcmsgclose}
+\draw[->] (l_closing) -- node[left]        {\manpage{2}{close}} (l_closed);
+
+\end{tikzpicture}

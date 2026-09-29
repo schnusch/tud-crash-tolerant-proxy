@@ -1,46 +1,117 @@
+\provideif{iferror}%
+\newcommand*{\cross}[2][cross]{%
+    \node[circle,inner sep=.5ex] (#1) at (#2) {};
+    \draw[thick,red!75!black] (#2) +(-.4ex,.4ex) -- +(.4ex,-.4ex) +(.4ex,.4ex) -- +(-.4ex,-.4ex);
+}%
+\newcommand*{\crosslabelleft}[3][]{%
+    \if\relax\detokenize{#1}\relax
+        \crosslabelleft[$(#2) + (0,-1em)$]{#2}{#3}%
+    \else
+        \node[anchor=east,fill=white,draw=red!75!black,circle,inner sep=0.25ex] (label) at ({-1em,0} |- {#1}) {\color{red!75!black}#3};
+        \draw[red!75!black,thick] (label) -- ({$(#2) + (-1em,0)$} |- {label}) -- (#2);
+    \fi
+}%
+\newcommand*{\crosslabelright}[3][]{%
+    \if\relax\detokenize{#1}\relax
+        \crosslabelright[$(#2) + (0,-1em)$]{#2}{#3}%
+    \else
+        \node[anchor=west,fill=white,draw=red!75!black,circle,inner sep=0.25ex] (label) at ({26em,0} |- {#1}) {\color{red!75!black}#3};
+        \draw[red!75!black,thick] (label) -- ({$(#2) + (1em,0)$} |- {label}) -- (#2);
+    \fi
+}%
 \begin{tikzpicture}[x=4em,y=-2em,>=Stealth]
 
-\node[anchor=south,draw] at (0,1em) {\strut Client};
-\node[anchor=south,draw] (listener) at (2,1em) {\strut Listener};
-\node[anchor=south,draw] (worker)   at (5,1em) {\strut Worker};
-\node[anchor=south,draw] at (7,1em) {\strut Server};
+\node[anchor=south,draw] at (0,1em) {Client};
+\node[anchor=south,draw] (listener) at (2,1em) {\shortstack[t]{Active\\Listener}};
+\node[anchor=south,draw] (worker)   at (5,1em) {Worker};
+\node[anchor=south,draw] at (7,1em) {Server};
 \node[anchor=south,inner sep=0] (proxy) at ({3.5,0} |- {listener.north}) {\bfseries Proxy};
 
 \node[draw,dashed,rounded corners,fit=(proxy)(listener)(worker),inner sep=.5em] (proc2) {};
 
-\draw (0,1em) -- (0,14);
-\draw (2,1em) -- (2,14);
-\draw (5,1em) -- (5,14);
-\draw (7,1em) -- (7,14);
+\draw (0,1em) -- (0,14.5);
+\draw (2,1em) -- (2,14.5);
+\draw (5,1em) -- (5,14.5);
+\draw (7,1em) -- (7,14.5);
 
 \draw[->]        (0,1) -- node[above=.5ex,anchor=base] {\manpage{2}{accept}} (2,1);
-\draw[->,dashed] (2,2) -- node[above=.5ex,anchor=base] {hand-over} (5,2);
+\draw[->,dashed] (2,1.5) -- node[above=.5ex,anchor=base] {\itshape copy file descriptor} (5,1.5);
 
-\draw[->,dashed] (5,3) -- node[above=.5ex,anchor=base] {connect to upstream} (2,3);
+\draw[->,dashed] (5,2.5) -- node[above=.5ex,anchor=base] {\itshape connect to upstream} (2,2.5);
 
-\node[fill=white] at (5,4) {};
-\draw[->]        (2,4) -- node[above=.5ex,anchor=base,pos=0.8] {\manpage{2}{connect}} (7,4);
-\draw[->,dashed] (2,5) -- node[above=.5ex,anchor=base] {hand-over} (5,5);
+\node[fill=white] at (5,3) {};
+\draw[->]        (2,3) -- node[above=.5ex,anchor=base,pos=0.8] {\manpage{2}{connect}} (7,3);
+\draw[->,dashed] (2,4) -- node[above=.5ex,anchor=base] {\itshape copy file descriptor} (5,4);
 
-\node[fill=white] at (0,6) {};
+\node[fill=white] at (0,5) {};
+\node[fill=white] at (2,5) {};
+\node[fill=white] at (5,5) {};
+\node[fill=white] at (7,5) {};
+\draw[dashed] (-0.5,5) -- (7.5,5);
+
 \node[fill=white] at (2,6) {};
-\node[fill=white] at (5,6) {};
-\node[fill=white] at (7,6) {};
-\draw[dashed] (-0.5,6) -- (7.5,6);
+\draw[->] (0,6) -- node[above=.5ex,anchor=base,pos=0.2] {\manpage{2}{recv}} (5,6);
+\draw[->] (7,6.5) -- node[above=.5ex,anchor=base] {\manpage{2}{recv}} (5,6.5);
+\draw[->] (5,7) to[bend left=90,looseness=2.5] node[right] (transform) {transform} (5,8);
+\node[fill=white] at (2,8.5) {};
+\draw[->] (5,8.5) -- node[above=.5ex,anchor=base,pos=0.8] {\manpage{2}{send}} (0,8.5);
+\draw[->] (5,9) -- node[above=.5ex,anchor=base] {\manpage{2}{send}} (7,9);
 
-\node[fill=white] at (2,7) {};
-\draw[->] (0,7) -- node[above=.5ex,anchor=base,pos=0.2] {\manpage{2}{recv}} (5,7);
-\draw[->] (5,8) to[bend left=90,looseness=2.5] node[right] {transform} (5,9);
-\draw[->] (5,10) -- node[above=.5ex,anchor=base] {\manpage{2}{send}} (7,10);
+\node[fill=white] at (0,10) {};
+\node[fill=white] at (2,10) {};
+\node[fill=white] at (5,10) {};
+\node[fill=white] at (7,10) {};
+\draw[dashed] (-0.5,10) -- (7.5,10);
 
-\node[fill=white] at (0,11) {};
-\node[fill=white] at (2,11) {};
-\node[fill=white] at (5,11) {};
-\node[fill=white] at (7,11) {};
-\draw[dashed] (-0.5,11) -- (7.5,11);
+\draw[->] (5,11) -- node[above=.5ex,anchor=base] {\manpage{2}{close}} (7,11);
+\node[fill=white] at (2,11.5) {};
+\draw[->] (5,11.5) -- node[above=.5ex,anchor=base,pos=0.8] (close2) {\manpage{2}{close}} (0,11.5);
 
-\draw[->] (5,12) -- node[above=.5ex,anchor=base] {\manpage{2}{close}} (7,12);
-\node[fill=white] at (2,13) {};
-\draw[->] (5,13) -- node[above=.5ex,anchor=base,pos=0.8] (close2) {\manpage{2}{close}} (0,13);
+\draw[->,dashed] (5,12.5) -- node[above=.5ex,anchor=base] {\itshape close} (2,12.5);
+
+\node[fill=white] at (5,13) {};
+\draw[->] (2,13) -- node[above=.5ex,anchor=base,pos=0.8] {\manpage{2}{close}} (7,13);
+\draw[->] (2,13.5) -- node[above=.5ex,anchor=base] (close2) {\manpage{2}{close}} (0,13.5);
+
+\iferror
+    \draw[dashed,red!75!black] (-0.5,1.25) -- (7.5,1.25);
+    \draw[dashed,red!75!black] (-0.5,3.25) -- (7.5,3.25);
+
+    \cross{1,1}
+    %\cross{2,1}
+    \draw[thick,red!75!black,decorate,decoration={brace, mirror}] (7,1) ++(.5em,0) -- node[right] {%
+        \hphantom{\,}interrupted \textit{accept}%
+    } ++(0,-1);
+
+    \cross{3.5,1.5}
+    \cross{3.5,2.5}
+    \cross{3.5,3}
+    \draw[thick,red!75!black,decorate,decoration={brace, mirror}] (7,3) ++(.5em,0) -- node[right] {%
+        \hphantom{\,}interrupted \textit{connect}%
+    } ++(0,-1.5);
+
+    \cross{3.5,4}
+    \cross{3.5,6}
+    \cross{6,6.5}
+    \cross{transform.west}
+    \cross{3.5,8.5}
+    \cross{6,9}
+    \draw[thick,red!75!black,decorate,decoration={brace, mirror}] (7,9.5) ++(.5em,0) -- node[right] {%
+        \hphantom{\,}%
+        \shortstack[l]{%
+            \vphantom{ly}interrupted while\\
+            \vphantom{ly}connection is\\
+            \vphantom{ly}fully established%
+        }%
+    } ++(0,-6);
+
+    \draw[thick,red!75!black,decorate,decoration={brace, mirror}] (7,14) ++(.5em,0) -- node[right] {%
+        \hphantom{\,}%
+        \shortstack[l]{%
+            \vphantom{ly}interrupted while\\
+            \vphantom{ly}terminating%
+        }%
+    } ++(0,-3.5);
+\fi
 
 \end{tikzpicture}

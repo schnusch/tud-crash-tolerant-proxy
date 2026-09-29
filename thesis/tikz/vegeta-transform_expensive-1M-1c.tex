@@ -1,0 +1,17 @@
+\newcommand*{\xlabel}{1\,MiB response, 1 concurrent request}%
+\newcommand*{\xopts}{xmax=12}%
+%\newcommand*{\binsyopts}{ymax=100}%
+\newcommand*{\csvname}[1]{data/vegeta/transform_expensive/#1/1M-1c-600s}%
+\newcommand*{\cumuplots}{%
+    \plotcumu{blue}{\csvname{baseline}-cumu.csv};
+    \plotcumu{red}{\csvname{proxy}-cumu.csv};
+}%
+\newcommand*{\binsplots}{%
+    \plotbins{draw=blue!75!black,fill=blue,opacity=0.5}{baseline}{\csvname{}-bins.csv};
+    \plotbins{draw=red!75!black,fill=red,opacity=0.5}{proxy}{\csvname{}-bins.csv};
+    \input{\csvname{baseline}.tex}
+    \input{\csvname{proxy}.tex}
+    \legendinfo{baseline variant}{blue}
+    \legendinfo{crash-tolerant variant}{red}
+}%
+\input{tikz/include/vegeta.tex}%

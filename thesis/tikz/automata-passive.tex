@@ -1,0 +1,29 @@
+\begin{tikzpicture}[x=4em,y=-4em,>=Stealth]
+
+\node[circle,fill,inner sep=.2em] (start)    at ( 0,-1) {};
+\node[circle,draw,inner sep=.5em] (init)     at ( 0,0  ) {};
+\node[circle,draw,inner sep=.5em] (prestart) at ( 1,1  ) {};
+\node[circle,draw,inner sep=.5em] (started)  at ( 1,2.5) {};
+\node[circle,draw,inner sep=.5em] (sigwait)  at ( 0,3.5) {};
+\node[circle,draw,inner sep=.5em] (sigchld)  at (-1,2.5) {};
+\node[circle,draw,inner sep=.5em] (term)     at (-1,1  ) {};
+\node[circle,draw,inner sep=.5em] (sigint)   at ( 0,4.5) {};
+
+\node[circle,draw,inner sep=.4em] at (sigint) {};
+
+\draw[->] (start) -- (init);
+\draw[->] (init) -- node[above,anchor=south west] {initialization} (prestart);
+\draw[->] (prestart) -- node[above,anchor=west] {\shortstack[l]{start\\\textit{active listener}}} (started);
+\draw[->] (started) to[bend left] node[right,anchor=west] (sigwait_label) {} (sigwait);
+\draw[->] (sigwait) -- node[right,anchor=west] {\texttt{SIGINT}} (sigint);
+\draw[->] (sigwait) -- node[below,anchor=north east] (sigchld_label) {\texttt{SIGCHLD}} (sigchld);
+\node[anchor=west] at ({sigwait_label} |- {sigchld_label}) {\manpage{2}{sigwait}};
+\draw[->,dashed] (sigwait) to[bend left] (started);
+\draw[->,dashed] (sigchld) -- (started);
+\draw[->] (sigchld) -- node[left,anchor=east] {\shortstack[r]{\textit{active listener}\\terminated}} (term);
+\draw[->] (term) -- node[above,anchor=south east] {\manpage{2}{execve}} (init);
+\draw[->,dashed] (term) -- node[below] {\shortstack{\manpage{2}{execve}\\failed}} (prestart);
+
+%\draw[->,dashed] (sigchld) -- node[above,anchor=south east,fill=white] {\manpage{2}{execve} failed} (prestart);
+
+\end{tikzpicture}

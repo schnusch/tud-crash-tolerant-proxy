@@ -11,9 +11,12 @@ function Div(elem)
     return nil
   end
 
-  return pandoc.Figure(
-    slice(elem.content, 1, #elem.content - 1),
-    pandoc.Caption(elem.content[#elem.content].content),
-    elem.attr
-  )
+  local contents = elem.content
+  local caption = nil
+  if not elem.classes:includes("nocaption") then
+    contents = slice(elem.content, 1, #elem.content - 1)
+    caption = pandoc.Caption(elem.content[#elem.content].content)
+  end
+
+  return pandoc.Figure(contents, caption, elem.attr)
 end

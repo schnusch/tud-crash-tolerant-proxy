@@ -1,0 +1,11 @@
+\begin{tikzpicture}
+    \begin{bitfield}
+        \field{unused}{\ldots}
+        \field{eight}{\tiny \raisebox{-.5\height}{8}}
+        \field{active}{0}
+        \field{state}{1111111}
+        \field{zero}{\tiny \raisebox{-.5\height}{0}}
+        \bracket{state}{\ttfamily ATOMIC\_SWAP}
+        \bracket{active}{\ttfamily active := 0 {\textrightarrow} 1}
+    \end{bitfield}
+\end{tikzpicture}

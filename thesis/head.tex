@@ -1,5 +1,9 @@
 \input{cd-hack.tex}
 
+% Center code samples.
+\RecustomVerbatimEnvironment{Highlighting}{BVerbatim}{commandchars=\\\{\}}
+\renewenvironment{Shaded}{\begin{center}}{\end{center}}
+
 % Title page
 \faculty{Faculty of Computer Science}
 \institute{Institute of Systems Architecture}
@@ -8,9 +12,13 @@
 \AtBeginDocument{%
     \thesis{\bachelorthesisname}%
 }
+\supervisor{%
+    Prof. Dr.-Ing. Horst Schirmeier%
+    \and
+    Prof. Dr.-Ing. Wolfgang Lehner%
+}
 
 % Include declarations and task right after the title page.
-\usepackage{lipsum}
 \usepackage{pdfpages}
 \AddToHook{cmd/maketitle/after}{%
     \csname if@openright\endcsname
@@ -19,18 +27,48 @@
         \clearpage
     \fi
     \input{declarations.tex}%
-    \csname if@openright\endcsname
-        \cleardoublepage
-    \else
-        \clearpage
-    \fi
-    \includepdf[
-        pages=-,
-        pagecommand={\thispagestyle{empty}},
-        noautoscale,
-        fitpaper,
-    ]{task.pdf}%
+%    \csname if@openright\endcsname
+%        \cleardoublepage
+%    \else
+%        \clearpage
+%    \fi
+%    \includepdf[
+%        pages=-,
+%        pagecommand={\thispagestyle{empty}},
+%        noautoscale,
+%        fitpaper,
+%    ]{task.pdf}%
 }
 
 \usepackage{tikz}
-\input{tikz/head.tex}
+\input{tikz/include/head.tex}
+
+% default figure alignment
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+
+% place floats in the current section
+\usepackage{placeins}
+\AddtoDoHook{heading/begingroup/section}{\FloatBarrier}
+\AddtoDoHook{heading/begingroup/subsection}{\FloatBarrier}
+
+% no extra space before \paragraph
+\RedeclareSectionCommand[
+    beforeskip=.5\parskip,
+]{paragraph}
+
+% provide \cref
+\AtBeginDocument{%
+    \usepackage[nameinlink,noabbrev]{cleveref}%
+    \crefname{figure}{figure}{figures}%
+    \Crefname{figure}{Figure}{Figures}%
+}
+\newcommand*{\fullref}[1]{\hyperref[{#1}]{\cref*{#1} {\itshape \nameref*{#1}}}}
+\newcommand*{\Fullref}[1]{\hyperref[{#1}]{\Cref*{#1} {\itshape \nameref*{#1}}}}
+
+\usepackage{enumitem}
+% forbid page break before itemizations
+\setlist{beginpenalty=9999}
+% configure default style for <dl>
+\setlist[description]{style=nextline}

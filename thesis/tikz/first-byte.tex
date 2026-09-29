@@ -1,0 +1,56 @@
+\newcommand*{\withmedian}[3]{%
+    \addplot+[
+        only marks,
+        mark=x,
+        color=#2,
+        forget plot,
+    ] table[
+        x=parallel,
+        y=write,
+        col sep=comma,
+    ]{#1-data.csv};
+    %\addplot[#2] table[
+    %    x=parallel,
+    %    y={create col/linear regression={
+    %        x=parallel,
+    %        y=write,
+    %    }},
+    %    col sep=comma,
+    %]{#1};
+    \def\mediancolor{#2}%
+    \def\medianlabel{#3}%
+    \input{#1-median.tex}%
+}%
+\begin{tikzpicture}
+\path[draw=none,fill=black,fill opacity=0] (12cm,0) +(2cm,0) -- (-2cm,0);
+\begin{axis}[
+    % chart size
+    scale only axis,
+    width=12cm,
+    height=4cm,
+    % styling
+    grid=major,
+    xlabel style={name=xlabel},
+    legend style={anchor=north,at=(xlabel.south)},
+    legend cell align=left,
+    % X axis
+    xlabel={Active connections},
+    xticklabel={\pgfmathprintnumber[assume math mode,fixed]{\tick}},
+    xticklabel style={rotate=45,anchor=north east},
+    scaled x ticks=false,
+    xmin=0,
+    enlarge x limits=0.0,
+    % Y axis
+    ylabel={byte round-trip},
+    ymin=0,
+    ymax=300,
+    yticklabel={\pgfmathprintnumber[assume math mode,fixed]{\tick}\,µs},
+    scaled y ticks=false,
+]
+
+\withmedian{data/first-haproxy}{orange!75!black}{HAProxy (TCP)}
+\withmedian{data/first-baseline}{blue!75!black}{baseline variant}
+\withmedian{data/first-proxy}{red!75!black}{crash-tolerant variant}
+
+\end{axis}
+\end{tikzpicture}

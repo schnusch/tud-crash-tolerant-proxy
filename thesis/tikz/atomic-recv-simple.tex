@@ -1,0 +1,54 @@
+\newcommand{\shortcut}[3][]{%
+    \draw[->,#1] (shortcutstart) -- ({shortcutstart} |- {$(#2) + (0,-0.5)$}) -- (#2);
+    \coordinate (shortcutstart) at ({shortcutstart} |- {$(#2) + (0,-0.5)$});
+    \node[anchor=south west] at ({$(shortcutstart) + (0.1,0.1)$} |- {#2.north}) {#3};
+}%
+\newcommand{\direct}[2]{%
+    \draw[->] ($(#1.south) + (3em,0)$) to[bend left] ($(#2.north) + (3em,0)$);
+}%
+\def\shortcutstart{switch}%
+\begin{tikzpicture}[x=12em,y=-4em,>=Stealth]
+
+\node[circle,fill,inner sep=.2em] (start)  at (0,-1.25) {};
+\node[circle,draw,inner sep=.5em] (switch) at (0,-0.5) {};
+\coordinate (shortcutstart) at (switch.south);
+\node[draw,rounded corners,anchor=north,inner sep=.5em] (init) at (1,0) {%
+    \shortstack{%
+        prepare syscall\\%
+        (write sentinel value)%
+    }%
+};
+\node[draw,rounded corners,anchor=north,inner sep=.5em] (syscall) at ($(init.south) + (0,1)$) {%
+    \shortstack{%
+        call \manpage{2}{recvmmsg}\\%
+        (overwrite sentinel value)%
+    }%
+};
+\node[draw,rounded corners,anchor=north,inner sep=.5em] (done) at ($(syscall.south) + (0,1)$) {%
+    \shortstack{%
+        update\\
+        receive buffer%
+    }%
+};
+\node[circle,draw,double,inner sep=.5em] (end) at ($(done.south) + (3em,1)$) {};
+
+\draw[->] (start) -- (switch);
+\direct{init}{syscall}
+\direct{syscall}{done}
+\draw[->] ($(done.south) + (3em,0)$) to[bend left] (end);
+
+\shortcut{init}{}
+\shortcut[dashed]{syscall}{%
+    \shortstack[l]{%
+        \manpage{2}{recvmmsg} interrupted\\
+        (sentinel value present)%
+    }%
+}
+\shortcut[dashed]{done}{%
+    \shortstack[l]{%
+        \manpage{2}{recvmmsg} finished\\
+        (sentinel value overwritten)%
+    }%
+}
+
+\end{tikzpicture}

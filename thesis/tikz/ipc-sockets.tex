@@ -1,0 +1,16 @@
+\begin{tikzpicture}[x=6em,y=-3em,>=Stealth]
+
+\node[draw,rounded corners,inner sep=0.5em]        (listener) at ( 0,0) {\textbf{Listener}};
+\node[draw,rounded corners,inner sep=0.5em]        (worker1)  at (-1,2) {\textbf{Worker}};
+\node[draw,dashed,rounded corners,inner sep=0.5em] (worker2)  at ( 1,2) {\textbf{Worker}};
+\node (center) at (0,1) {};
+
+\draw (listener) -- (center.center);
+\draw[->] (center.center) to[out=270,in=0] (worker1);
+\draw[<->] (listener) -- node[left] {\texttt{*}} (worker1);
+
+\draw[<->,dashed] (listener) -- (worker2);
+\node[anchor=west,fill=white,inner sep=0] at ($(center.center) + (\fboxsep,0)$) {\texttt{"accepted slot=\%d"}};
+\draw[->,dashed] (center.center) to[out=270,in=180] (worker2);
+
+\end{tikzpicture}

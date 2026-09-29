@@ -1,0 +1,36 @@
+\begin{tikzpicture}[x=20em,y=-2em,>=Stealth]
+
+\node[anchor=south,draw] at (0,-0.5) {\strut Listener};
+\node[anchor=south,draw] at (1,-0.5) {\strut Worker};
+
+\draw (0,-0.5) -- (0,9);
+\draw (1,-0.5) -- (1,9);
+
+\draw[->,dashed] (-3em,0.5) -- (0,0.5);
+\draw[->] (0,1) -- node[above=.5ex,anchor=base] {\texttt{"accepted slot=\%d"} + file descriptor} +(1,0);
+\draw[->] (1,2) -- node[above=.5ex,anchor=base] {\texttt{"connect slot=\%d addr=192.0.2.1:80"}} +(-1,0);
+\node[fill=white] at (1,2.5) {};
+\draw[->,dashed] (0,2.5) -- (23em,2.5);
+\draw[->] (0,3.5) -- node[above=.5ex,anchor=base] {\texttt{"connected slot=\%d"} + file descriptor} +(1,0);
+\draw[->,black!50] (0,4.5) -- node[above=.5ex,anchor=base] {\texttt{"close slot=\%d"}} +(1,0);
+
+\node[fill=white] at (0,6) {};
+\node[fill=white] at (1,6) {};
+\draw[dashed] (1,6) +(3em,0) -- node[fill=white] {\textit{processing connection}} (-3em,6);
+
+\draw[->] (1,7.5) -- node[above=.5ex,anchor=base] {\texttt{"close slot=\%d"}} +(-1,0);
+
+\node[fill=white] at (1,8) {};
+\draw[dashed] (1,8) ++(3em,0) ++(-0.5ex,0) -- (0,8);
+\draw[thick] (1,8) ++(3em,0) ++(-0.5ex,0) +(-0.5ex,-0.5ex) -- +(0.5ex,0.5ex) +(-0.5ex,0.5ex) -- +(0.5ex,-0.5ex);
+
+\draw[thick] (-3em,8.5) ++(0.5ex,0) +(-0.5ex,-0.5ex) -- +(0.5ex,0.5ex) +(-0.5ex,0.5ex) -- +(0.5ex,-0.5ex);
+\draw[dashed] (-3em,8.5) ++(0.5ex,0) -- (0,8.5);
+
+\end{tikzpicture}
+
+%\newcommand*{\ipcmsgaccepted }{\shortstack[r]{\texttt{"accepted slot=\%d"}\\+ file descriptor}}%
+%\newcommand*{\ipcmsgconnect  }{\texttt{"connect slot=\%d addr=192.0.2.1:80"}}%
+%\newcommand*{\ipcmsgconnected}{\shortstack[r]{\texttt{"connected slot=\%d"}\\+ file descriptor}}%
+%\newcommand*{\ipcmsgclose    }{\texttt{"close slot=\%d"}}%
+%\input{tikz/ipc.tex}%

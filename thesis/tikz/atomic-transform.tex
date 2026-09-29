@@ -1,0 +1,66 @@
+\newcommand{\shortcut}[2]{%
+    \draw[->] (shortcutstart) -- ({shortcutstart} |- {$(#1) + (0,-0.5)$}) -- (#1);
+    \coordinate (shortcutstart) at ({shortcutstart} |- {$(#1) + (0,-0.5)$});
+    \node[anchor=south west] at ({$(shortcutstart) + (0.1,0.1)$} |- {#1.north}) {#2};
+}%
+\newcommand{\direct}[2]{%
+    \draw[->] ($(#1.south) + (5em,0)$) to[bend left] ($(#2.north) + (5em,0)$);
+}%
+\def\shortcutstart{switch}%
+\begin{tikzpicture}[x=12em,y=-4em,>=Stealth]
+
+\node[circle,fill,inner sep=.2em] (start)  at (0,-1.25) {};
+\node[circle,draw,inner sep=.5em] (switch) at (0,-0.5) {};
+\coordinate (shortcutstart) at (switch.south);
+\node[rounded corners,anchor=north,inner sep=.5em] (init_below) at (1,0) {%
+    \phantom{%
+        \shortstack[l]{%
+            \texttt{0123456789abcdef0123456789abcdef}\\
+            \texttt{0123456789abcdef0123456789abcdef}\\
+            \texttt{0123456789abcdef0123456789abcdef}\\
+            \texttt{0123456789abcdef0123456789abcdef}%
+        }%
+    }%
+};
+\node[draw,rounded corners,anchor=north,inner sep=.5em] (init) at (1,0) {%
+    \shortstack[l]{%
+        \texttt{\textbf{foreach}(buf) \{}\\
+        \texttt{\ \ buf[!active] := buf[active]}\\
+        \texttt{\}}\\
+        \texttt{transform(!active)}\\
+        \texttt{state := CONN\_SWAP\_BUFFERS}\\
+        \texttt{\ \ | (!downstream.rx.active << 8)}\\
+        \texttt{\ \ | (!downstream.tx.active << 9)}\\
+        \texttt{\ \ | /* ... */}%
+        \csname @ifundefined\endcsname{r@fig:conn-swap-buffers}{}{%
+            \\
+            \hphantom{\texttt{\ \ buf[!active] := buf[active]}}%
+            \llap{\footnotesize (see \cref{fig:conn-swap-buffers})}%
+        }%
+    }%
+};
+\node[draw,rounded corners,anchor=north,inner sep=.5em] (swap) at ($(init.south) + (0,1)$) {%
+    \shortstack[l]{%
+        \texttt{downstream.rx.active}\\
+        \texttt{\ \ := state \& (1 << 8)}\\
+        \texttt{/* ... */}\\
+        \texttt{state := CONN\_POLL}%
+    }%
+};
+\node[circle,draw,double,inner sep=.5em] (end) at ($(swap.south) + (5em,1)$) {};
+
+\draw[->] (start) -- (switch);
+\direct{init}{swap}
+\draw[->] ($(swap.south) + (5em,0)$) to[bend left] (end);
+
+\shortcut{init_below}{%
+    \texttt{state == CONN\_POLL}%
+}
+\shortcut{swap}{%
+    \shortstack[l]{%
+        \texttt{state \& 0xFF ==}\\
+        \texttt{CONN\_SWAP\_BUFFERS}%
+    }%
+}
+
+\end{tikzpicture}

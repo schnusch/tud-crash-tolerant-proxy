@@ -1,0 +1,81 @@
+\providecommand*{\xopts}{}%
+\providecommand*{\binsyopts}{}%
+\newcommand*{\plotcumu}[1]{%
+    \addplot[
+        const plot mark left,
+        #1!75!black,
+        line width=2\fboxrule,
+    ] table[
+        x=latency_ns,
+        y=percentage,
+        col sep=comma,
+    ]%
+}%
+\newcommand*{\plotbins}[2]{%
+    \addplot[
+        ybar interval,
+        #1,
+    ] table[
+        x=upper_bound,
+        y={#2},
+        col sep=comma,
+    ]%
+}%
+\begin{tikzpicture}
+\path[draw=none,fill=black,fill opacity=0] (12cm,0) +(2cm,0) -- (-2cm,0);
+
+\begin{groupplot}[
+    group style={
+        group size=1 by 2,
+        vertical sep=0.5cm,
+        xlabels at=edge bottom,
+        xticklabels at=edge bottom,
+    },
+    scale only axis,
+    width=12cm,
+    height=3cm,
+    grid=major,
+    % X axis
+    xlabel={\null},%\xlabel},
+    xticklabel={%
+        \pgfmathprintnumber[assume math mode,fixed,precision=1]{\tick}\,ms%
+    },
+    xticklabel style={rotate=45,anchor=north east},
+    scaled x ticks=false,
+    xmin=0,
+    % Y axis
+    yticklabel={%
+        \hphantom{100}%
+        \llap{\pgfmathprintnumber[assume math mode]{\tick}}%
+        \,\%%
+    },
+    ymin=0,
+]
+
+\nextgroupplot[
+    % X axis
+    \xopts ,
+    % Y axis
+    ylabel={\footnotesize \strut Cumulative distribution},
+    %ylabel style={yshift=-0.5em},
+    ymax=100,
+]
+\cumuplots
+
+%\pgfkeys{/pgf/fpu}%
+\nextgroupplot[
+    % X axis
+    xlabel style={name=xlabel},
+    legend style={anchor=north,at=(xlabel.south)},
+    legend cell align=left,
+    \xopts ,
+    % Y axis
+    ylabel={\footnotesize \strut Percentage of requests},
+    \binsyopts
+]
+\binsplots
+%\pgfkeys{/pgf/fpu=false}%
+
+\end{groupplot}
+
+\end{tikzpicture}

@@ -1,0 +1,26 @@
+\begin{tikzpicture}[x=8em,y=-4em,>=Stealth]
+
+\node[draw] (down_recvbuf) at (-1,0) {receive buffer};
+\node[draw] (up_recvbuf)   at ( 1,0) {receive buffer};
+
+\node[draw] (down_sendbuf) at (-1,2) {send buffer};
+\node[draw] (up_sendbuf)   at ( 1,2) {send buffer};
+
+\node[anchor=base,inner sep=0] (downstream) at ($(down_recvbuf.north) + (0,1em)$) {\textbf{Downstream}};
+\node[anchor=base,inner sep=0]              at ($(up_recvbuf.north)   + (0,1em)$) {\textbf{Upstream}};
+
+\draw[dashed] ({0,0} |- {downstream.north}) -- ({0,0} |- {down_sendbuf.south});
+
+\node[draw,rounded corners,fill=white,inner sep=.5em] (xfrm) at (0,1) {\texttt{transform()}};
+\node[draw,fill=white] (ctx)  at (0,0) {context};
+
+\draw[->] (down_recvbuf) -- (xfrm);
+\draw[->] (up_recvbuf)   -- (xfrm);
+
+\draw[->] (xfrm) -- (down_sendbuf);
+\draw[->] (xfrm) -- (up_sendbuf);
+
+\draw[->] (ctx)  to[bend left] (xfrm);
+\draw[->] (xfrm) to[bend left] (ctx);
+
+\end{tikzpicture}

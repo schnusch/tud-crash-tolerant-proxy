@@ -1,7 +1,26 @@
-{%
-\newcommand*{\proxystyle   }{dashed}%
-\newcommand*{\baselinestyle}{dashed}%
-\newcommand*{\nginxstyle   }{dashed}%
-\newcommand*{\networklabel }{Virtual network through \texttt{podman-compose}}%
-\input{tikz/include/veth.tex}%
-}%
+\begin{tikzpicture}[x=9em,y=-4em,inner sep=0.5em,>=Stealth,anchor=base]
+
+\node[draw] (nginx) at (0,-1) {nginx HTTP server};
+\node[draw] (benchmark) at (0,1) {Benchmark};
+
+\begin{scope}[color=red!75!black]
+\node[draw] (proxy) at (-1,0) {crash-tolerant variant};
+\draw[->] (benchmark) -- (proxy);
+\draw[->] (proxy) -- (nginx);
+\end{scope}
+
+\begin{scope}[color=orange!75!black]
+\node[draw] (haproxy) at (0,0) {HAProxy};
+\draw[->] (benchmark) -- (haproxy);
+\draw[->] (haproxy) -- (nginx);
+\end{scope}
+
+\begin{scope}[color=blue!75!black]
+\node[draw] (baseline) at (1,0) {baseline variant};
+\draw[->] (benchmark) -- (baseline);
+\draw[->] (baseline) -- (nginx);
+\end{scope}
+
+\draw[->,color=green!75!black] (benchmark) to[bend right=60,looseness=1.5] (nginx);
+
+\end{tikzpicture}%

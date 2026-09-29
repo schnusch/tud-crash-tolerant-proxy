@@ -1,0 +1,57 @@
+\providecommand*{\tikzargs}{x=12em,y=-4em}%
+\newcommand*{\ipcpath}[4]{%
+    \draw[->] (#1) -- (#2);
+    \path (#1.center) -- node[#3] {#4} (#2.center);
+}%
+
+\def \tempa {\begin{tikzpicture}}%
+\expandafter \tempa
+\expandafter [\tikzargs,>=Stealth]
+
+\node[circle,draw,inner sep=.5em] (l_accepting) at (0,0) {};
+
+\node[anchor=south east] (c) at ($(l_accepting) + (-2em,1em)$) {%
+    \shortstack[r]{%
+        \texttt{state == CONN\_CONNECTING}\\
+        \texttt{\&\& upstream.fd[0] >= 0}%
+    }%
+};
+\node[anchor=south east] (b) at (c.north east) {%
+    \texttt{state \& 0xFF == CONN\_SWAP\_BUFFERS}%
+};
+\node[anchor=south east] (a) at (b.north east) {%
+    \texttt{state == CONN\_POLL}%
+};
+
+\draw[dashed,->] (a.east) -- ({l_accepting} |- {$(a) + (0,-.5em)$}) -- (l_accepting);
+\draw[dashed]    (b.east) -- ({l_accepting} |- {$(b) + (0,-.5em)$});
+\draw[dashed]    (c.east) -- ({l_accepting} |- {$(c) + (0,-.5em)$});
+
+\node[anchor=south,inner sep=0] (listener) at ({0,0} |- {$(a.north) + (0,1em)$}) {\textbf{Listener}};
+\node[anchor=south,inner sep=0]            at ({1,0} |- {$(a.north) + (0,1em)$}) {\textbf{Worker}};
+
+\node[circle,draw,inner sep=.5em] (w_connecting) at (1,1) {};
+\node[circle,draw,inner sep=.5em] (l_connecting) at (0,2) {};
+\node[circle,draw,inner sep=.5em] (w_connecting_fd) at (1,3) {};
+\node[draw,fill=black!10,inner sep=0.5em] (processing) at (1,4) {processing};
+
+\draw[dashed] ({0.5,0} |- {listener.north}) -- ({0.5,0} |- {processing.south});
+
+\ipcpath{l_accepting}{w_connecting}{below left}{%
+    \shortstack[r]{%
+        \texttt{"orphan\_down slot=\%d"}\\
+        + file descriptor%
+    }%
+}
+\ipcpath{w_connecting}{l_connecting}{below right,pos=0.5}{%
+    \texttt{"orphan\_up slot=\%d"}%
+}
+\ipcpath{l_connecting}{w_connecting_fd}{below left}{%
+    \shortstack[r]{%
+        \texttt{"orphan\_up slot=\%d"}\\
+        + file descriptor%
+    }%
+}
+\draw[->] (w_connecting_fd) -- (processing);
+
+\end{tikzpicture}

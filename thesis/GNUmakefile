@@ -7,12 +7,12 @@ TEX_ONLY_SRCS = \
 	head.tex \
 	cd-hack.tex \
 	declarations.tex \
+	noto.tex \
 	tikz/include/head.tex
 TIKZ_SRCS = $(wildcard tikz/*.tex)
 TIKZ_SVGS = $(patsubst %.tex,out/$(NAME)/%.svg,$(TIKZ_SRCS))
 PDF_ATTACHMENTS = \
-	tmp/tex/$(NAME)-html.tar.gz \
-	tmp/tex/$(NAME)-source.tar.gz
+	tmp/tud-crash-tolerant-proxy.tar.gz
 
 .PHONY: all pdf html clean
 
@@ -21,7 +21,7 @@ all: html pdf
 clean:
 	$(RM) -r out tmp
 
-html: out/$(NAME)/index.html
+html: $(TIKZ_SVGS) out/$(NAME)/index.html
 
 pdf: out/$(NAME).pdf
 
@@ -31,10 +31,14 @@ out/$(NAME).pdf: tmp/tex/$(NAME).pdf $(PDF_ATTACHMENTS)
 	@mkdir -p $(@D)
 	qpdf $< $(patsubst %,--add-attachment % --,$(PDF_ATTACHMENTS)) --linearize $@
 
-tmp/tex/$(NAME).pdf: tmp/tex/$(NAME).tex $(TIKZ_SRCS)
+tmp/tex/$(NAME).pdf: tmp/tex/$(NAME).tex $(patsubst %,tmp/html/%,$(TIKZ_SRCS))
 	latexmk -g -xelatex -output-directory=$(@D) -jobname=$(@F:.pdf=) $< < /dev/null
 
 # PDF attachments
+
+tmp/tud-crash-tolerant-proxy.tar.gz:
+	scp -p 141.76.48.110:$(@F) $@.tmp
+	mv $@.tmp $@
 
 TAR_CMD = tar --create --dereference --owner=root:0 --group=root:0 --file=$(@:.gz=.tmp)
 GZ_CMD = (zopfli $(@:.gz=.tmp) || gzip -9 $(@:.gz=.tmp)) && mv $(@:.gz=.tmp.gz) $@
@@ -92,6 +96,7 @@ tmp/html/tikz/%.tex: tikz/%.tex tikz/include/head.tex noto.tex
 	{ echo '\def\pgfsysdriver{pgfsys-dvips.def}'; \
 	  echo '\documentclass[11pt,tikz]{standalone}'; \
 	  cat noto.tex tikz/include/head.tex; \
+	  echo '\usepackage[hidelinks]{hyperref}'; \
 	  echo '\begin{document}'; \
 	  cat $<; \
 	  echo '\end{document}'; \
@@ -121,3 +126,67 @@ data/first-proxy.csv:
 	@mkdir -p $(@D)
 	scp -p 141.76.48.110:tud-crash-tolerant-proxy/benchmark/$(@F) $@.tmp
 	mv $@.tmp $@
+
+# vegeta
+
+tmp/mk/plots.mk: GNUmakefile
+	@mkdir -p $(@D)
+	{ echo nginx    transform_nop       green  120; \
+	  echo haproxy  transform_nop       orange 120; \
+	  echo baseline transform_nop       blue   120; \
+	  echo proxy    transform_nop       red    120; \
+	  echo haproxy  transform_headers   orange 120; \
+	  echo baseline transform_headers   blue   120; \
+	  echo proxy    transform_headers   red    120; \
+	  echo baseline transform_expensive blue   600; \
+	  echo proxy    transform_expensive red    600; \
+	} | while read host xfrm color duration; do \
+	  for parallel in 1 10 100 1000; do \
+	    for size in 1K 1M 256M; do \
+	      src="vegeta/$${xfrm}/$${host}/$${size}-$${parallel}c-$${duration}s"; \
+	      bin="vegeta/$${xfrm}/$${src##*/}-bins.csv"; \
+	      echo "download: ../benchmark/$${src}.csv.gz"; \
+	      echo "../benchmark/$${src}.csv.gz:"; \
+	      echo "	@mkdir -p \$$(@D)"; \
+	      echo "	scp -p 141.76.48.110:tud-crash-tolerant-proxy/benchmark/$${src}.csv.gz \$$@.tmp"; \
+	      echo "	mv \$$@.tmp \$$@"; \
+	      [ -e "../benchmark/$${src}.csv.gz" ] || { echo "../benchmark/$${src}.csv.gz does not exist" >&2; : continue; }; \
+	      echo "data/$${src}-slice.csv.gz: ../benchmark/$${src}.csv.gz"; \
+	      echo "	@mkdir -p \$$(@D)"; \
+	      echo "	gzip -d < '../benchmark/$${src}.csv.gz' \\"; \
+	      echo "	| ./tools/slice.py latency_ns \\"; \
+	      echo "	| gzip > \$$@.tmp"; \
+	      echo "	mv \$$@.tmp \$$@"; \
+	      echo "data/$${src}-cumu.csv \\"; \
+	      echo "data/$${src}.tex: \\"; \
+	      echo "		data/$${src}-slice.csv.gz \\"; \
+	      echo "		tools/histogram.py"; \
+	      echo "	@mkdir -p \$$(@D)"; \
+	      echo "	./tools/histogram.py --color='$${color}' --downsample=1000 --multiply=0.000001 \\"; \
+	      echo "		-H 'data/$${src}-cumu.csv' \\"; \
+	      echo "		-Q 'data/$${src}.tex' \\"; \
+	      echo "		latency_ns \\"; \
+	      echo "		'data/$${src}-slice.csv.gz'"; \
+	      echo "#	gzip -d < data/$${src}-slice.csv.gz \\"; \
+	      echo "#	| wc -l \\"; \
+	      echo "#		- \\"; \
+	      echo "#		'data/$${src}-cumu.csv' \\"; \
+	      echo "#		'data/$${src}.tex'"; \
+	      echo "tmp/html/tikz/vegeta-$${xfrm}-$${size}-$${parallel}c.tex: \\"; \
+	      echo "		tikz/include/vegeta.tex \\"; \
+	      echo "		data/$${src}.tex \\"; \
+	      echo "		data/$${src}-cumu.csv \\"; \
+	      echo "		data/$${bin}"; \
+	      echo "data/$${bin}: data/$${src}-slice.csv.gz"; \
+	      [ "$${host}" = proxy ] || printf '#'; \
+	      echo "data/$${bin}:"; \
+	      [ "$${host}" = proxy ] || printf '#'; \
+	      echo "	./tools/bins.py --multiply=0.000001 -o \$$@ -c latency_ns \$$(foreach foo,\$$^,\$$(shell basename \`dirname \$$(foo)\`):\$$(foo))"; \
+	      echo; \
+	    done; \
+	  done; \
+	done > $@.tmp
+	mv $@.tmp $@
+ifneq ($(MAKECMDGOALS),clean)
+-include tmp/mk/plots.mk
+endif

@@ -1,0 +1,134 @@
+\providecommand*{\tikzargs}{x=16em,y=-6em}%
+\providecommand*{\nodestyle}{rounded corners}%
+\providecommand*{\edgeepoll      }{\manpage{2}{epoll\_wait}}%
+\providecommand*{\ipcmsgaccepted }{\shortstack[r]{\texttt{"accepted slot=\%d"}\\+ file descriptor}}%
+\providecommand*{\ipcmsgconnect  }{\texttt{"connect slot=\%d addr=\%s:\%d"}}%
+\providecommand*{\ipcmsgconnected}{\shortstack[r]{\texttt{"connected slot=\%d"}\\+ file descriptor}}%
+\providecommand*{\nodetext}[1]{#1}%
+\newcommand*{\ipcpath}[4]{%
+    \draw[->] (#1) -- (#2);
+    \path (#1.center) -- node[#3] {#4} (#2.center);
+}%
+
+\provideif{ifloop}%
+\provideif{ifrecover}%
+\provideif{ifconnect}%
+\provideif{iftrunc}%
+
+\def \tempa {\begin{tikzpicture}}%
+\expandafter \tempa
+\expandafter [\tikzargs,>=Stealth]
+
+\node[\nodestyle,draw,inner sep=.5em] (l_accepting) at (0,1) {%
+    \nodetext{%
+        \shortstack[l]{%
+            \texttt{downstream.fd[0] := -1}\\
+            \texttt{state := CONN\_ACCEPTING}%
+        }%
+    }%
+};
+
+\ifrecover
+    \node[circle,inner sep=.2em,anchor=north] (start) at (l_accepting.north) {};
+\else
+    \node[circle,fill,inner sep=.2em] (start) at (0,0) {};
+\fi
+\node[anchor=south,inner sep=0] (listener) at ({0,0} |- {$(start) + (0,1em)$}) {\textbf{Listener}};
+\node[anchor=south,inner sep=0]            at ({1,0} |- {$(start) + (0,1em)$}) {\textbf{Worker}};
+
+\node[\nodestyle,draw,inner sep=.5em] (l_accepting_fd) at (0,2) {%
+    \nodetext{%
+        \texttt{downstream.fd[0] := \$fd}%
+    }%
+};
+
+\node[\nodestyle,draw,inner sep=.5em] (w_connecting) at (1,3) {
+    \nodetext{%
+        \shortstack[l]{%
+            \texttt{worker\_pid := getpid()}\\
+            \texttt{downstream.fd[1] := \$fd}\\
+            \texttt{upstream.fd[0] := -1}\\
+            \texttt{state := CONN\_CONNECTING}%
+        }%
+    }%
+};
+
+\node[circle,draw,inner sep=.5em] (l_connecting) at (0,4) {};
+\iftrunc
+    \node[circle,inner sep=.5em,rotate=90] (l_connecting_fd) at (0,5) {\ldots};
+    \draw[dashed] ({0.5,0} |- {listener.north}) -- ({0.5,0} |- {l_connecting_fd.west});
+\else
+    \node[\nodestyle,draw,inner sep=.5em] (l_connecting_fd) at (0,5) {%
+        \nodetext{%
+            \texttt{upstream.fd[0] := \$fd}%
+        }%
+    };
+
+    \node[\nodestyle,draw,inner sep=.5em] (w_connecting_fd) at (1,6) {%
+        \nodetext{%
+            \shortstack[l]{%
+                \texttt{upstream.fd[1] := \$fd}\\
+                \texttt{state := CONN\_POLL}%
+            }%
+        }%
+    };
+
+    \node[draw,fill=black!10,inner sep=0.5em] (processing) at (1,7) {processing};
+    \ifrecover
+    \else
+        \node[draw,fill=black!10,inner sep=0.5em] (error) at (0,7) {Error};
+    \fi
+    \draw[dashed] ({0.5,0} |- {listener.north}) -- ({0.5,0} |- {processing.south});
+\fi
+
+\ifrecover
+\else
+    \draw[->] (start) -- node[right] {\edgeepoll} (l_accepting);
+\fi
+\draw[->] (l_accepting)     -- node[right] (accept)  {\manpage{2}{accept}} (l_accepting_fd);
+\ipcpath{l_accepting_fd}{w_connecting}{below left}{\ipcmsgaccepted}
+\ifloop
+    \draw[->] (w_connecting) to[loop,out=30,in=90,looseness=8] node[above] {process connection} (w_connecting);
+\fi
+\ipcpath{w_connecting}{l_connecting}{below right}{\ipcmsgconnect}
+
+\draw[->] (l_connecting)    -- node[right] (connect) {\manpage{2}{connect}} (l_connecting_fd);
+\iftrunc
+\else
+    \ipcpath{l_connecting_fd}{w_connecting_fd}{below left}{\ipcmsgconnected}
+    \draw[->] (w_connecting_fd) -- (processing);
+\fi
+
+\ifrecover
+    \ifconnect
+        \node[anchor=east] (r_post_accept) at (-5em,2) {%
+            \shortstack[r]{%
+                \texttt{state == CONN\_CONNECTING}\\
+                \texttt{\&\& upstream.fd[0] < 0}%
+            }%
+        };
+    \else
+        \node[anchor=east] (r_pre_accept) at (-5em,1) {%
+            \shortstack[r]{%
+                \texttt{state == CONN\_ACCEPTING}\\
+                \texttt{\&\& downstream.fd[0] < 0}%
+            }%
+        };
+        \draw[->,dashed] (r_pre_accept) -- (l_accepting);
+
+        \node[anchor=east] (r_post_accept) at (-5em,2) {%
+            \shortstack[r]{%
+                \texttt{state == CONN\_ACCEPTING}\\
+                \texttt{\&\& downstream.fd[0] >= 0}%
+            }%
+        };
+    \fi
+    \draw[->,dashed] (r_post_accept) -- (l_accepting_fd);
+\else
+    \draw (accept)  -- ({-7em,0} |- {accept})  -- ({-7em,0} |- {connect});
+    \draw[->] (connect) -- ({-7em,0} |- {connect}) -- node[right]          {error} ({-7em,0} |- error)       -- (error);
+
+    \path[fill=black,fill opacity=0] (1,0) ++({8em,0} |- {listener.north}) rectangle ({-8em,0} |- {processing.south});
+\fi
+
+\end{tikzpicture}

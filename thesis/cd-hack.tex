@@ -17,6 +17,8 @@
     }%
     % *\tempa = \notosans
     \expandafter\let\tempa\notosans
+    %\expandafter\def\tempa{\notosans}%
+    %\expandafter\show\tempa
 }
 % Title page header (\faculty, ...) font.
 \makeatletter
@@ -26,6 +28,7 @@
         \edef\tud@cdfont@fam@lf{\notosansfamily}%
         \old@tud@head@font@set
     }%
+%    \show \tud@head@font@light
 }
 \makeatother
 

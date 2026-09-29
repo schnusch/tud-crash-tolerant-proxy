@@ -1,8 +1,28 @@
+@phdthesis{aghdaie2005transparent,
+  author       = {Navid Aghdaie},
+  title        = {Transparent Fault-Tolerant Network Services Using Off-the-Shelf Components},
+  school       = {University of California, Los Angeles},
+  year         = {2005},
+  type         = {Ph.D. Dissertation},
+  institution  = {Department of Computer Science},
+  url          = {https://web.cs.ucla.edu/~tamir/csl/theses/navid_aghdaie_thesis.pdf}
+}
+
 @inproceedings{ansel2009dmtcp,
     author = {Jason Ansel and Kapil Arya and Gene Cooperman},
     title = {{DMTCP}: Transparent Checkpointing for Cluster Computations and the Desktop},
     year = {2009},
     url = {https://dmtcp.sourceforge.io/papers/dmtcp.pdf},
+}
+
+@online{zim2024maxRlimitNofile,
+  author  = {Zim, Levi},
+  title   = {What is the maximum possible value of {RLIMIT\_NOFILE}?},
+  year    = {2024},
+  month   = aug,
+  day     = {11},
+  url     = {https://www.kxxt.dev/blog/max-possible-value-of-rlimit-nofile/},
+  urldate = {2026-09-28},
 }
 
 @inproceedings{clark2005live,
@@ -24,6 +44,17 @@
     month = jul,
     address = {Ottawa, Canada},
     url = {https://www.cs.columbia.edu/~orenl/papers/ols2010-linuxcr.pdf},
+}
+
+@inproceedings{marwah2003tcp,
+  author    = {Manish Marwah and Shivakant Mishra and Christof Fetzer},
+  title     = {TCP Server Fault Tolerance Using Connection Migration to a Backup Server},
+  booktitle = {Proceedings of the International Conference on Dependable Systems and Networks (DSN)},
+  year      = {2003},
+  pages     = {373--382},
+  publisher = {IEEE},
+  doi       = {10.1109/DSN.2003.1209948},
+  url       = {https://www.researchgate.net/publication/4021648_TPC_server_fault_tolerance_using_connection_migration_to_a_backup_server}
 }
 
 @inproceedings{mirkin2008containers,
@@ -62,6 +93,27 @@
     url         = {https://www.rfc-editor.org/rfc/rfc9112.html}
 }
 
+@inproceedings{shavit1995software,
+  author = {Nir Shavit and Dan Touitou},
+  title = {Software Transactional Memory},
+  booktitle = {Proceedings of the 14th Annual ACM Symposium on Principles of Distributed Computing},
+  year = {1995},
+  pages = {204--213},
+  publisher = {ACM},
+  doi = {10.1145/224964.224987},
+  url = {https://dl.acm.org/doi/abs/10.1145/224964.224987},
+}
+
+
+@inproceedings{zagorodnov2003engineering,
+  author    = {Dmitrii Zagorodnov and Keith Marzullo and Lorenzo Alvisi and Thomas C. Bressoud},
+  title     = {Engineering Fault-Tolerant TCP/IP Servers Using FT-TCP},
+  booktitle = {Proceedings of the International Conference on Dependable Systems and Networks (DSN)},
+  year      = {2003},
+  pages     = {393--402},
+  url       = {https://www.cs.cornell.edu/lorenzo/papers/fttcp2.pdf}
+}
+
 % software
 
 @software{anubis,
@@ -79,6 +131,55 @@
     urldate = {2026-08-27},
 }
 
+@online{fil-c,
+  author  = {Pizlo, Filip},
+  title   = {How Fil-C Works},
+  url     = {https://fil-c.org/how},
+  urldate = {2026-09-12},
+}
+
+@online{glibc-clone3,
+  title = {{Bug 26371: please add clone3() wrapper}},
+  date = {2020-08-11},
+  url = {https://sourceware.org/bugzilla/show_bug.cgi?id=26371},
+  urldate = {2026-09-12},
+  note = {GNU C Library Bugzilla},
+}
+
+@online{haproxy_manual,
+  author  = {{HAProxy Technologies}},
+  title   = {HAProxy Configuration Manual, Version 3.3r1},
+  year    = {2026},
+  url     = {https://www.haproxy.com/documentation/haproxy-configuration-manual/3-3r1/},
+  urldate = {2026-09-06}
+}
+
+@online{kde-420906,
+  author  = {Nick Black and others},
+  title   = {Bug 420906: missing syscall wrapper for clone3 (435)},
+  year    = {2020},
+  url     = {https://bugs.kde.org/show_bug.cgi?id=420906},
+  urldate = {2026-09-08},
+  note    = {Valgrind Bugzilla}
+}
+
+@misc{llhttp,
+  author = {Fedor Indutny and others},
+  title = {{llhttp}},
+  version = {9.4.0},
+  url = {https://github.com/nodejs/llhttp/releases/tag/release/v9.4.0},
+  date = {2026-04-28},
+}
+
+@online{nginx_admin_manual,
+  author  = {{F5, Inc.}},
+  title   = {Control NGINX Processes at Runtime},
+  year    = {2026},
+  note    = {NGINX 1.30.4},
+  url     = {https://docs.nginx.com/nginx/admin-guide/basic-functionality/runtime-control/},
+  urldate = {2026-09-06}
+}
+
 @misc{systemd_fdstore,
     title = {systemd v219 NEWS},
     author = {{systemd Project}},
@@ -89,7 +190,7 @@
 
 @software{go-away,
     title = {go-away},
-    author = {WeebDataHoarder},
+    author = {{WeebDataHoarder}},
     version = {0.7.0},
     date = {2025-05-03},
     url = {https://git.gammaspectra.live/git/go-away},
@@ -111,11 +212,46 @@
     url = {https://github.com/torvalds/linux/blob/v7.2/mm/oom_kill.c#L912-L992},
 }
 
+@online{linux_wait_event_interruptible,
+  author  = {{The kernel development community.}},
+  title   = {Driver Basics: wait\_event\_interruptible},
+  version = {7.2},
+  date = {2026-08-16},
+  url     = {https://www.kernel.org/doc/html/v7.2/driver-api/basics.html},
+  urldate = {2026-09-29},
+}
+
+@software{vegeta,
+    title = {{vegeta}},
+    author = {Tomás Senart},
+    version = {12.13.0},
+    date = {2025-10-31},
+    url = {https://github.com/tsenart/vegeta},
+}
+
+@techreport{iso9899-2011-n1570,
+  author      = {{ISO/IEC JTC 1/SC 22/WG 14}},
+  title       = {{Programming Languages --- C}},
+  institution = {International Organization for Standardization},
+  year        = {2011},
+  number      = {N1570},
+  note        = {Section 7.17, ``Atomics <stdatomic.h>''},
+  url         = {https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf}
+}
+
+@misc{picohttpparser,
+  author = {Kazuho Oku and Tokuhiro Matsuno and Daisuke Murase and Shigeo Mitsunari},
+  title = {{picohttpparsee}},
+  version = {1.2},
+  url = {https://github.com/h2o/picohttpparser/releases/tag/v1.2},
+  date = {2026-04-06},
+}
+
 % man pages
 
 @manual{errno,
-    title = {errno(3)},
-    author = {The Linux man-pages project},
+    title = {{errno(3)}},
+    author = {{The Linux man-pages project}},
     organization = {Linux Foundation},
     version = {6.18},
     date = {2026-02-10},
@@ -123,30 +259,75 @@
 }
 
 @manual{_exit,
-    title = {_exit(2)},
-    author = {The Linux man-pages project},
+    title = {{_exit(2)}},
+    author = {{The Linux man-pages project}},
     organization = {Linux Foundation},
     version = {6.18},
     date = {2026-02-10},
     url = {https://man7.org/linux/man-pages/man2/_exit.2.html},
 }
 
+@manual{F_SETFD,
+    title = {{F\_GETFD(2const)}},
+    author = {{The Linux man-pages project}},
+    organization = {Linux Foundation},
+    version = {6.18},
+    date = {2026-02-10},
+    url = {https://man7.org/linux/man-pages/man2/F_SETFD.2const.html},
+}
+
+@manual{mmap2,
+    title = {{mmap(2)}},
+    author = {{The Linux man-pages project}},
+    organization = {Linux Foundation},
+    version = {6.19},
+    date = {2026-03-19},
+    url = {https://man7.org/linux/man-pages/man2/mmap.2.html},
+}
+
+@manual{recvmmsg,
+    title = {{recvmmsg(2)}},
+    author = {{The Linux man-pages project}},
+    organization = {Linux Foundation},
+    version = {6.19},
+    date = {2026-02-08},
+    url = {https://man7.org/linux/man-pages/man2/recvmmsg.2.html},
+}
+
 @manual{seccomp,
-    title = {seccomp(2)},
-    author = {The Linux man-pages project},
+    title = {{seccomp(2)}},
+    author = {{The Linux man-pages project}},
     organization = {Linux Foundation},
     version = {6.18},
     date = {2026-02-10},
     url = {https://man7.org/linux/man-pages/man2/seccomp.2.html},
 }
 
+@manual{sendmmsg,
+    title = {{sendmmsg(2)}},
+    author = {{The Linux man-pages project}},
+    organization = {Linux Foundation},
+    version = {6.19},
+    date = {2026-02-08},
+    url = {https://man7.org/linux/man-pages/man2/sendmmsg.2.html},
+}
+
 @manual{signal7,
-    title = {signal(7)},
-    author = {The Linux man-pages project},
+    title = {{signal(7)}},
+    author = {{The Linux man-pages project}},
     organization = {Linux Foundation},
     version = {6.18},
     date = {2026-02-10},
     url = {https://man7.org/linux/man-pages/man7/signal.7.html},
+}
+
+@manual{unix7,
+    title = {{unix(7)}},
+    author = {{The Linux man-pages project}},
+    organization = {Linux Foundation},
+    version = {6.18},
+    date = {2026-02-08},
+    url = {https://man7.org/linux/man-pages/man7/unix.7.html},
 }
 
 % posix

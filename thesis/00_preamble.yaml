@@ -3,18 +3,37 @@ documentclass: tudscrreprt
 classoption:
 - abstract=heading
 - abstract=notoc
-- twoside
-- openright
+## Layout for duplex printing.
+#- twoside
+#- openright
 # loading "Roboto Mono" fails
 - ttfont=false
 boxlinks: false
 csquotes: true
 mathspec: true # tudscr does not work with `unicode-math`
 
+## Display double pages side by side.
+#- pdfpagelayout=TwoPageRight
+
 lang: en-US
+link-citations: true
+biblatexoptions:
+- backend=biber
+- sorting=none
 
 title: A Crash-Tolerant Proxy Service for High-Availability Environments
+date: 2026-09-29
 
 abstract: |
-  \lipsum
+  The central role of proxies in networks places them in a critical position, where any interruption can significantly impact adjacent services.
+  Therefore, their ability to recover from faults can become an important requirement of the service.
+
+  This work investigates crash-tolerance mechanisms of such a proxy service, entirely implemented in userspace.
+  By employing redundant processes, replication of file descriptors, and shared memory, the resulting proxy can recover from unexpected process terminations, as long as one of its processes persists.
+  Operations on the central shared memory, including socket I/O, are performed through transactions, so that it remains in a consistent state at all times.
+
+  The effectiveness of the approach is evaluated qualitatively and quantitatively.
+  Connection persistence is achieved and thousands of concurrent connections can be recovered in less than a second.
+  When compared to a similar architecture, memory overhead is minimal but computational overhead of transactional I/O and memory access can vary widely, depending on the workload.
+  However, when compared to existing conventional proxies, further improvements are necessary to achieve the same level of performance.
 ...

@@ -1,5 +1,14 @@
+\usepackage{graphicx}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{pgfplotstable}
+\usepgfplotslibrary{groupplots}
+
 \usetikzlibrary{arrows.meta}
+\usetikzlibrary{backgrounds}
 \usetikzlibrary{calc}
+\usetikzlibrary{fit}
+\usetikzlibrary{shapes.geometric}
 
 % Macros for creating an annotated bit field.
 \makeatletter
@@ -17,7 +26,7 @@
             -- ++(0,-0.5ex)
             -- ($(#2.base east) + (0,-0.5ex)$) coordinate[midway] (mid)
             -- (#2.base east);%
-        \draw (mid) |- ($(bitfield@labelpos) + (0,0.8ex)$);
+        \draw (mid) |- ($(bitfield@labelpos) + (0,0.6ex)$);
         \node[anchor=base west] (label) at (bitfield@labelpos) {#3};
         \coordinate (bitfield@labelpos) at ($(label.base west) + (0,-\baselineskip)$);
     \fi
@@ -29,3 +38,13 @@
     \let \bracket \bitfield@bracket
 }{}
 \makeatother
+
+\newcommand*{\provideif}[1]{%
+    \csname @ifundefined\endcsname{#1}{%
+        \expandafter\newif\csname #1\endcsname
+    }{}%
+}%
+
+\newcommand*{\manpage}[2]{%
+    \href{https://man7.org/linux/man-pages/man#1/#2.#1.html}{\texttt{#2(#1)}}%
+}%

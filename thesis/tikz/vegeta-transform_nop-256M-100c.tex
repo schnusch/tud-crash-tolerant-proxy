@@ -1,0 +1,25 @@
+\newcommand*{\xlabel}{256\,MiB response, 100 concurrent request}%
+\newcommand*{\xopts}{xmax=17000}%
+%\newcommand*{\binsyopts}{ymax=50}%
+\newcommand*{\csvname}[1]{data/vegeta/transform_nop/#1/256M-100c-120s}%
+\newcommand*{\cumuplots}{%
+    \plotcumu{green}{\csvname{nginx}-cumu.csv};
+    \plotcumu{orange}{\csvname{haproxy}-cumu.csv};
+    \plotcumu{blue}{\csvname{baseline}-cumu.csv};
+    \plotcumu{red}{\csvname{proxy}-cumu.csv};
+}%
+\newcommand*{\binsplots}{%
+    \plotbins{draw=green!75!black,fill=green,opacity=0.5}{nginx}{\csvname{}-bins.csv};
+    \plotbins{draw=orange!75!black,fill=orange,opacity=0.5}{haproxy}{\csvname{}-bins.csv};
+    \plotbins{draw=blue!75!black,fill=blue,opacity=0.5}{baseline}{\csvname{}-bins.csv};
+    \plotbins{draw=red!75!black,fill=red,opacity=0.5}{proxy}{\csvname{}-bins.csv};
+    \input{\csvname{nginx}.tex}
+    \input{\csvname{haproxy}.tex}
+    \input{\csvname{baseline}.tex}
+    \input{\csvname{proxy}.tex}
+    \legendinfo{nginx}{green}
+    \legendinfo{HAProxy (TCP)}{orange}
+    \legendinfo{baseline variant}{blue}
+    \legendinfo{crash-tolerant variant}{red}
+}%
+\input{tikz/include/vegeta.tex}%
