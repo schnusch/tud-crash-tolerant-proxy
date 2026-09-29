@@ -1,3 +1,14 @@
+\iffalse
+
+\includepdf[
+    pages=-,
+    pagecommand={\thispagestyle{empty}},
+    noautoscale,
+    fitpaper,
+]{declarations.pdf}%
+
+\else
+
 \begin{declarations}%
     \confirmation
 
@@ -22,3 +33,5 @@
         \csname @confirmationclosing\endcsname
     }%
 \end{declarations}%
+
+\fi
