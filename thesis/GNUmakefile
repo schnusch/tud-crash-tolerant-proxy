@@ -100,6 +100,10 @@ tmp/html/tikz/%.tex: tikz/%.tex tikz/include/head.tex noto.tex
 
 # byte latency
 
+tmp/html/tikz/fail-accept.tex: data/fail-accept-data.csv
+
+tmp/html/tikz/fail-recv.tex: data/fail-recv-data.csv
+
 tmp/html/tikz/first-byte.tex: \
 		data/first-haproxy-data.csv \
 		data/first-baseline-data.csv \
@@ -109,6 +113,8 @@ data/%-data.csv: data/%.csv tools/median.py
 	./tools/median.py < $(@:-data.csv=.csv) > $@.tmp 3> $(@:-data.csv=-median.tex)
 	mv $@.tmp $@
 
+data/fail-accept.csv \
+data/fail-recv.csv \
 data/first-haproxy.csv \
 data/first-baseline.csv \
 data/first-proxy.csv:

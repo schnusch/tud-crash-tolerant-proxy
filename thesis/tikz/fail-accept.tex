@@ -18,7 +18,7 @@
     xmin=0,
     enlarge x limits=0.0,
     % Y axis
-    ylabel={byte round-trip},
+    ylabel={\manpage{2}{connect} round-trip},
     ymin=0,
     yticklabel={%
         \pgfkeys{/pgf/fpu}%
@@ -37,9 +37,9 @@
     forget plot,
 ] table[
     x=parallel,
-    y=write,
+    y=accept,
     col sep=comma,
-]{data/fail-recv-data.csv};
+]{data/fail-accept-data.csv};
 \addplot[
     mark=,
     color=red!75!black,
@@ -47,10 +47,10 @@
     x=parallel,
     y={create col/linear regression={
         x=parallel,
-        y=write,
+        y=accept,
     }},
     col sep=comma,
-]{data/fail-recv-data.csv};
+]{data/fail-accept-data.csv};
 
 \end{axis}
 \end{tikzpicture}
