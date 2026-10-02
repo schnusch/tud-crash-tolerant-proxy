@@ -108,4 +108,5 @@ jobs:
     - run: BENCHMARK_HOST='${{ matrix.benchmark_host }}' nix run -L '.?submodules=1#compose.${{ matrix.xfrm }}.vegeta'
     - uses: actions/upload-artifact@v4
       with:
+        name: compose.${{ matrix.xfrm }}.vegeta
         path: benchmark/
