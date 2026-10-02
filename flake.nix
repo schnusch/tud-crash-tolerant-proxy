@@ -3,7 +3,7 @@
     nixpkgs = {
       type = "indirect";
       id = "nixpkgs";
-      ref = "624af665418d3c65d544145b4d34ad696439570e";
+      ref = "56c02bc00adcf003215cc4bd996d6efaf4cff188";
     };
   };
 
