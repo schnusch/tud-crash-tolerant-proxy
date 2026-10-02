@@ -1,10 +1,17 @@
 ---
-top-level-division: chapter
+from: markdown+citations
+citeproc: true
+bibliography: citations.bib
+cite-method: biblatex
 csl: ieee.csl
 
 toc: true
 toc-depth: 4
 number-sections: true
 
+top-level-division: chapter
+
 section-divs: true
+html-math-method:
+  method: mathml
 ...
