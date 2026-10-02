@@ -105,6 +105,13 @@ jobs:
       with:
         submodules: recursive
     - run: ${{ env.nix_copy_from }}
+      # This somehow avoid the following error in the next step:
+      # > $ podman-compose up --build --exit-code-from=benchmark
+      # > failed to reexec: Permission denied
+      # > [...]
+      # > ERROR:podman_compose:Build command failed
+      # > ERROR:podman_compose:Prepare images failed
+    - run: podman run --rm docker.io/library/alpine:latest true
     - run: BENCHMARK_HOST='${{ matrix.benchmark_host }}' nix run -L '.?submodules=1#compose.${{ matrix.xfrm }}.vegeta'
     - uses: actions/upload-artifact@v4
       with:
