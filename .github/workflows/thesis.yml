@@ -18,7 +18,8 @@ jobs:
         && git fetch --unshallow
         && git bundle create "$GIT_BUNDLE" ${{ github.ref }}
         && git add --force --intent-to-add "$GIT_BUNDLE"
-        && sed -e "/^PDF_ATTACHMENTS = \\\\$/ a $GIT_BUNDLE \\\\" -i GNUmakefile
+        && sed -e "/^	tmp\\/tud-crash-tolerant-proxy\\.tar\\.gz\$/ s::	$GIT_BUNDLE:" -i GNUmakefile
+    - run: git diff --patch --no-exit-code
     - run: nix build -L ./thesis#default
     - uses: actions/upload-artifact@v4
       with:
