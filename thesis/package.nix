@@ -7,6 +7,7 @@
   python3,
   qpdf,
   texliveFull,
+  unzip,
   xan,
   zopfli,
   date ? null,
@@ -24,6 +25,7 @@ stdenvNoCC.mkDerivation {
     python3
     qpdf
     texliveFull
+    unzip
     xan
     zopfli
   ];
@@ -65,6 +67,12 @@ stdenvNoCC.mkDerivation {
           hash = "sha256:9b023e1b62d7459fefe7f989fbc6be1d54638952ab2581111b5895de0aa444e1";
         }
       } ieee.csl
+      ln -fs ${
+        fetchurl {
+          url = "https://github.com/tud-cd/tudcd-scr/releases/download/0.7.1/tudcdscr-sharelatex-beamer-0.7.1.zip";
+          hash = "sha256:db1624a75c37d5481029d90d587cfdf025ed645df0562113e6c377bbf74ddd9d";
+        }
+      } presentation/tudcdscr-sharelatex-beamer-0.7.1.zip
       patchShebangs --build tools/
       export HOME=$(mktemp -d)
     '';
@@ -75,6 +83,7 @@ stdenvNoCC.mkDerivation {
     cp -r out/crash-tolerant-proxy "$html"
     mkdir "$out"
     cp out/crash-tolerant-proxy.pdf "$out/"
+    cp presentation/main.pdf "$out/presentation.pdf"
 
     runHook postInstall
   '';

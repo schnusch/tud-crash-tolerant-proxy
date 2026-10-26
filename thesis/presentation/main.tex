@@ -1,0 +1,949 @@
+% Start
+\documentclass{beamer}
+\usetheme{tudcd}
+\iftutex
+  \usepackage{fontspec}
+\else
+  \usepackage[T1]{fontenc}
+  \usepackage[ngerman=ngerman-x-latest]{hyphsubst}
+\fi
+\usepackage[american]{babel}
+
+\usepackage[backend=biber,sorting=none]{biblatex}
+\addbibresource{citations.bib}
+
+\usepackage{adjustbox}
+\usepackage{pifont}% \ding
+
+\usepackage{pdfpc}
+\renewcommand*{\note}[1]{%
+  \makebox[0pt]{% set width to 0pt
+    \raisebox{0pt}[0pt][0pt]{% set height and depth to 0pt
+      \pdfpcnote{#1}%
+    }%
+  }%
+}
+\def\lf{^^J}
+
+\title[Crash-Tolerant Proxy]{A Crash-Tolerant Proxy Service for High-Availability Environments}
+\author{\texorpdfstring{\texttt{\$AUTHOR}}{\$AUTHOR}}
+\context{Bachelor Thesis}
+\location{Dresden}
+\date{2026-10-26}
+
+\input{tikz/include/head.tex}
+\urlstyle{same}
+\begin{document}
+
+\TUDCDsetup{
+  color = {
+    highlight-color=Weiss,
+    secondary-color=Brilliantblau
+  },
+  logo = {
+    color = white
+  }
+}
+\maketitle
+\TUDCDsetup{
+  color = {
+    highlight-color=Brilliantblau,
+    secondary-color=Weiss
+  },
+  logo = {
+    color = blue
+  }
+}
+
+\begin{frame}{Motivation}
+  \begin{columns}[T]
+    \begin{column}{.5\textwidth}
+      \begin{adjustbox}{max width=\textwidth}%
+        \input{tikz/proxy-network.tex}%
+      \end{adjustbox}%
+    \end{column}%
+    \begin{column}{0.4\textwidth}
+      \begin{itemize}
+        \item logging
+        \item content-filtering
+        \item authorization
+        \item load-balancing
+        \item network separation
+        \item \ldots
+      \end{itemize}%
+    \end{column}
+  \end{columns}%
+  \note{%
+    %* concurrent/asyncio\lf
+    * offload tasks from client/server to proxy\lf
+    * DBs, weil Idee von Prof. Lehner\lf
+    * ..., TLS, abuse, re-routing, transform%
+  }%
+\end{frame}
+
+\begin{frame}{Critical role in the network}
+  \centering
+  \begin{adjustbox}{max width=\textwidth}%
+    \newif\ifcrash
+    \crashtrue
+    \input{tikz/proxy-network.tex}%
+  \end{adjustbox}%
+
+  \begin{minipage}{.6\textwidth}%
+    \begin{alertblock}{Problem}%
+      If the proxy terminates all its connections terminate.%
+    \end{alertblock}%
+  \end{minipage}%
+  \note{%
+    * planned restart/upgrade\lf
+    * crashes/faults\lf
+    * impact on adjacent services%
+  }%
+\end{frame}
+
+\begin{frame}{Existing solutions}
+  \begin{columns}[T]%
+    \begin{column}{.55\textwidth}
+      \begin{itemize}
+      \item<1->
+        protocol-level retries
+        \only<1>{%
+          \note{%
+            * TCP-based\lf
+            * TCP ist layer 4%
+          }%
+        }%
+
+      \item<2->
+        CRIU -- Checkpoint/Restore In Userspace \autocite{criu}
+
+        \begin{itemize}
+          \item
+            checkpoint process trees
+          \item
+            supports TCP sockets with \texttt{TCP\_REPAIR}%
+            \only<2>{%
+              \note{%
+                * TCP_REPAIR: read/write kernel buffers\lf
+                * periodic vs reactive checkpoint%
+              }%
+            }%
+        \end{itemize}%
+
+      \item<2->
+        VM checkpointing \autocite{clark2005live}
+
+      \item<5->
+        TCP-based replication (e.\,g., FT-TCP \autocite{zagorodnov2003engineering},
+        ST-TCP \autocite{marwah2003tcp}, or CoRAL \autocite{aghdaie2005transparent})
+
+        \begin{itemize}
+          \item save incoming raw TCP traffic
+          \item replay TCP traffic to replicate
+        \end{itemize}%
+
+\only<5>{%
+        \note{%
+          * TCP replay\lf
+          * Logger wird point of failure\lf
+          * CoRAL's raw sockets\lf
+          * (Server) Fault Tolerant TCP\lf
+          * Fetzer%
+        }%
+}%
+      \end{itemize}
+    \end{column}%
+\onslide<5->{%
+    \begin{column}{.4\textwidth}
+      \vspace*{4em}%
+      \flushright
+      \begin{adjustbox}{max width=\textwidth}
+        \shortstack{%
+          \includegraphics[
+            page=4,
+            trim={20mm 55mm 116.9mm 180.4mm},
+            clip,
+          ]{st-tcp.pdf}\\
+          \includegraphics[
+            page=4,
+            trim={20mm 39mm 116.9mm 233.2mm},
+            clip,
+          ]{st-tcp.pdf}%
+        }%
+      \end{adjustbox}\par
+      \vspace{-.3em}%
+      \scriptsize Credits: \textcite{marwah2003tcp}%
+    \end{column}%
+}%
+  \end{columns}%
+
+\only<3-4>{%
+  \begin{tikzpicture}[remember picture, overlay]
+    \node (foo) at (.5\textwidth,.5\textheight) {%
+      \begin{minipage}{.8\textwidth}%
+        \begin{block}{Limitations of checkpointing}%
+          \begin{columns}[T]
+            \begin{column}{0.45\textwidth}
+              \begin{adjustbox}{max height=.7\textheight}%
+                \begin{tikzpicture}[x=10em,y=-2em,>=Stealth]
+                  \node[draw,anchor=south] at (0,-1) {\strut Host};
+                  \node[draw,anchor=south] at (1,-1) {\strut Peer};
+                  \draw (0,-1) -- (0,8.5);
+                  \draw (1,-1) -- (1,8.5);
+
+                  \draw[->] (1,0) -- node[above=.5ex,anchor=base] {\texttt{data[0:512]}} (0,0);
+                  \draw[->] (0,0.5) to[bend left=-90,looseness=2.5] node[left] (transform) {%
+                    \shortstack[r]{%
+                      update kernel\\
+                      buffers%
+                    }%
+                  } (0,1.5);
+                  \draw[->] (0,2) -- node[above=.5ex,anchor=base] {\texttt{ACK 512}} (1,2);
+                  \node[anchor=west] at (1,2) {seq\# 512};
+
+                  \node[anchor=east] at (-2em,2.5) {\color{Gruen1}\shortstack[r]{checkpoint\\(seq\# 512)}};
+                  \node[fill=Grau10] at (0,2.5) {};
+                  \draw[dashed,Gruen1] (-2em,2.5) -- (2em,2.5);
+
+                  \draw[->] (1,3.5) -- node[above=.5ex,anchor=base] {\texttt{data[512:1024]}} (0,3.5);
+                  \draw[->] (0,4) to[bend left=-90,looseness=2.5] node[left] (transform) {%
+                    \shortstack[r]{%
+                      update kernel\\
+                      buffers%
+                    }%
+                  } (0,5);
+                  \draw[->] (0,5.5) -- node[above=.5ex,anchor=base] {\texttt{ACK 1024}} (1,5.5);
+                  \node[anchor=west] at (1,5.5) {seq\# 1024};
+
+                  \node[anchor=east] at (-2em,6) {\color{Rot1}{\Lightning} crash {\Lightning}};
+                  \node[fill=Grau10] at (0,6) {};
+                  \draw[dashed,Rot1] (-2em,6) -- (2em,6);
+                \end{tikzpicture}
+              \end{adjustbox}%
+            \end{column}%
+  \onslide<4>{%
+            \begin{column}{0.45\textwidth}
+              \begin{adjustbox}{max height=.7\textheight}%
+                \begin{tikzpicture}[x=10em,y=-2em,>=Stealth]
+                  \node[draw,anchor=south] at (0,-1) {\strut Host};
+                  \node[draw,anchor=south] at (1,-1) {\strut Peer};
+                  \draw (0,-1) -- (0,8.5);
+                  \draw (1,-1) -- (1,8.5);
+
+                  \node[anchor=east] at (-2em,2.5) {\color{Gruen1}\shortstack[r]{restore\\(seq\# 512)}};
+                  \node[fill=Grau10] at (0,2.5) {};
+                  \draw[dashed,Gruen1] (-2em,2.5) -- (2em,2.5);
+
+                  \draw[->] (1,7) -- node[above=.5ex,anchor=base] {\texttt{data[1024:1536]}} (0,7);
+                  \draw[->,Rot1] (0,8) -- node[above=.5ex,anchor=base] {\color{Rot1}{\Lightning} \texttt{ACK 512} {\Lightning}} (1,8);
+                \end{tikzpicture}
+              \end{adjustbox}%
+            \end{column}%
+  }%
+          \end{columns}%
+        \end{block}%
+      \end{minipage}%
+    };
+    \fill[white,opacity=0.8] ({0,0} |- {foo.north}) rectangle (foo.south west);
+  \end{tikzpicture}%
+  \note{%
+    * seq\# of peer\lf
+    * no longer in send buffer%
+  }%
+}%
+\end{frame}
+
+\begin{frame}{Goal and error model}
+  \begin{columns}%
+    \begin{column}{.45\textwidth}%
+      \begin{exampleblock}{\strut in-scope}%
+        \begin{minipage}[c][.55\textheight]{\linewidth}%
+          \begin{itemize}%
+            \item
+              transparent to clients and servers
+            \item
+              tolerate process termination
+
+              \begin{itemize}
+                \item implementation bugs
+                \item by other processes
+                \item by operating system (OOM killer)
+              \end{itemize}
+            \item
+              isolation of components
+          \end{itemize}%
+        \end{minipage}%
+      \end{exampleblock}%
+    \end{column}%
+    \begin{column}{.45\textwidth}
+      \begin{alertblock}{\strut out-of-scope}
+        \begin{minipage}[c][.55\textheight]{\linewidth}%
+          \begin{itemize}%
+            \item network interruptions
+            \item misbehaving operating system
+            \item hardware failures
+            \item power loss
+          \end{itemize}%
+        \end{minipage}%
+      \end{alertblock}%
+    \end{column}%
+  \end{columns}%
+  \note{%
+    * deterministic bugs = bad\lf
+    * kill by signals\lf
+    * isolate complex transformation\lf
+    * unprivileged\lf
+    * reusable%
+  }%
+\end{frame}
+
+\begin{frame}{Connection lifecycle}
+  \begin{columns}
+    \begin{column}{.55\textwidth}
+      \begin{itemize}
+        \item
+          transformation of traffic
+        \item
+          many connections in parallel
+
+          \begin{itemize}
+            \item asynchronous/non-blocking I/O
+            \item interwoven control flow, i.e., coroutines
+        \end{itemize}%
+      \end{itemize}%
+    \end{column}%
+    \begin{column}{.4\textwidth}
+      \begin{adjustbox}{max height=.8\textheight}%
+        \input{tikz/connection-lifecycle-simple.tex}%
+      \end{adjustbox}%
+    \end{column}%
+  \end{columns}%
+  \note{%
+    * 3 stages\lf
+    * 2nd stage simplified\lf
+    * alles = xfrm\lf
+    * error page = xfrm\lf
+    * not thread/process per connection\lf
+    * 1st stage => fd copy%
+  }%
+\end{frame}
+
+\begin{frame}{Redundant processes}
+  \centering
+  \begin{adjustbox}{max height=.8\textheight}%
+    \begin{tikzpicture}[x=12em,y=-6em,>=Stealth]
+      \node[draw,fill=gray!30,anchor=south] (fdtab1) at (0,0) {%
+        \shortstack[l]{%
+          %\textbullet\ IPC sockets\\
+          \textbullet\ \textbf{listening sockets}\\
+          \textbullet\ \textbf{shared memory}\\
+          \textbullet\ \textbf{connection 1}\\
+          \hphantom{\textbullet\ }\vphantom{connection 1}\ldots\\
+          \textbullet\ \textbf{connection \textit{N}}%
+        }%
+      };
+      \node[inner sep=0,anchor=north east] (label1) at (fdtab1.north west) {\textbf{\rlap{primary}\hphantom{\shortstack{primary\\backup}\hspace{.5em}}}};
+      \node[draw,rounded corners,fit=(label1)(fdtab1),inner sep=.5em] (process1) {};
+
+      \node[draw,fill=gray!30,anchor=north] (fdtab2) at (0,1) {%
+        \shortstack[l]{%
+          %\textbullet\ IPC sockets\\
+          \textbullet\ \textbf{listening sockets}\\
+          \textbullet\ \textbf{shared memory}\\
+          \textbullet\ \textbf{connection 1}\\
+          \hphantom{\textbullet\ }\vphantom{connection 1}\ldots\\
+          \textbullet\ \textbf{connection \textit{N}}%
+        }%
+      };
+      \node[inner sep=0,anchor=north east] (label2) at (fdtab2.north west) {\textbf{\rlap{backup}\hphantom{\shortstack{primary\\backup}\hspace{.5em}}}};
+      \node[draw,rounded corners,fit=(label2)(fdtab2),inner sep=.5em] (process2) {};
+
+      \draw[->] ({fdtab1} |- {process1.south})
+        -- node[right] {\shortstack[l]{copy file\\descriptors}}
+        ({fdtab2} |- {process2.north});
+
+      \node[
+        inner sep=.5em,
+        path picture={
+          \draw
+            ($(path picture bounding box.north east) + (-.5\pgflinewidth,-.5\pgflinewidth)$)
+            ++(-1em,0)
+            -- ++(0,-1em)
+            -- ++(1em,0)
+            -- ++(-1em,1em)
+            -- ($(path picture bounding box.north west) + (.5\pgflinewidth,-.5\pgflinewidth)$)
+            -- ($(path picture bounding box.south west) + (.5\pgflinewidth,.5\pgflinewidth)$)
+            -- ($(path picture bounding box.south east) + (-.5\pgflinewidth,.5\pgflinewidth)$)
+            -- ($(path picture bounding box.north east) + (-.5\pgflinewidth,-.5\pgflinewidth) + (0,-1em)$);
+        },
+      ] (shmem) at (1,0.5) {\shortstack{\strut\\shared\\memory\\\strut}};
+
+      \draw[->] (process1) -- (shmem);
+      \draw[->] (process2) -- (shmem);
+    \end{tikzpicture}%
+  \end{adjustbox}%
+  \note{%
+    * kernel resources tied to fd\lf
+    * Unix socket, SCM_RIGHTS\lf
+    * shared memory%
+  }%
+\end{frame}
+
+\begin{frame}{Redundant processes}
+  \framesubtitle{%
+      \vphantom{Shared file descriptor table}%
+      \only<2->{Shared file descriptor table}%
+  }
+
+  \begin{columns}[T]
+    \begin{column}{0.4\textwidth}
+      \begin{alertblock}{Problem}
+        \ttfamily
+        \footnotesize
+        \textcolor{Blau1}{int} fd = accept(listen\_fd,\newline
+        \hphantom{\scalebox{16}{ }}NULL, NULL);\newline
+        \textcolor{Gruen1}{// {\Lightning} CRASH {\Lightning}}\newline
+        copy\_fd(fd);%
+      \end{alertblock}%
+    \end{column}%
+    \begin{column}<2->{0.55\textwidth}%
+      \begin{exampleblock}{Solution}%
+        \centering
+        \vspace{.5em}%
+        \begin{adjustbox}{max width=\textwidth,max height=.8\textheight}%
+          \input{tikz/clone-files.tex}%
+        \end{adjustbox}%
+        \vspace{.5em}%
+      \end{exampleblock}%
+    \end{column}%
+  \end{columns}
+\only<1>{%
+  \note{%
+    * auch für connect\lf
+    * neue Verbindungen arguably unwichtig%
+  }%
+}%
+\only<2->{%
+  \note{%
+    * CLONE_FILES Horsts Idee\lf
+    * lost file descriptors%
+  }%
+}%
+\end{frame}
+
+\begin{frame}{Final process tree}
+  \centering
+  \begin{adjustbox}{max height=.8\textheight}%
+    \newenvironment{secondslide}{\begin{uncoverenv}<2->}{\end{uncoverenv}}%
+    \input{tikz/process-tree.tex}%
+  \end{adjustbox}%
+\only<1>{%
+  \note{%
+    * active/passive listener%
+  }%
+}%
+\only<2->{%
+  \note{%
+    * worker scope\lf
+    * privileges\lf
+    * comparison nginx\lf
+    * separate executable (execve vs clone)\lf
+    * multiple workers\lf
+    * interrupted shmem => Transactions%
+  }%
+}%
+\end{frame}
+
+\begin{frame}{Transactions}
+  \begin{columns}
+    \begin{column}{0.45\textwidth}
+      \centering
+      \begin{adjustbox}{max height=.8\textheight}%
+        \begin{tikzpicture}[x=4em,y=-3em,>=Stealth]
+          \node[circle,fill,inner sep=.2em] (start) at (0,0) {};
+          \node[circle,draw,inner sep=.5em] (a) at (1,1) {};
+          \node[circle,draw,inner sep=.5em] (b) at (1,2) {};
+          \node[circle,draw,inner sep=.5em] (c) at (1,3) {};
+          \node[rotate=90] (d) at (1,4) {\ldots};
+
+          \draw[->] (start) -- (0,0.5) -- (a);
+          \draw[->] (a) -- node[right] {\only<2->{\texttt{state := \ldots}}\only<1>{\hphantom{\texttt{state := \ldots}}}} (b);
+          \draw[->] (b) -- node[right] {\only<2->{\texttt{state := \ldots}}} (c);
+          \draw[->] (c) -- node[right] {\only<2->{\texttt{state := \ldots}}} (d);
+
+\visible<3->{
+          \node[anchor=east] at (0,0.5) {\texttt{state?}};
+          \node[rotate=90] (e) at (0,3.5) {\ldots};
+          \draw[dashed,->] (0,0.5) -- (e);
+          \draw[dashed,->] (0,1.5) -- (b);
+          \draw[dashed,->] (0,2.5) -- (c);
+}
+        \end{tikzpicture}%
+      \end{adjustbox}%
+    \end{column}%
+    \begin{column}{0.5\textwidth}
+      \begin{itemize}
+        \item split into idempotent steps
+        \item<2-> update \texttt{state} atomically
+        \item<3-> continue with interrupted step
+      \end{itemize}%
+    \end{column}%
+  \end{columns}%
+  \note{%
+    * not all of ACID, no isolation, durability\lf
+    * explain idempotent\lf
+    * Vgl. basis block\lf
+    * atomic = single instruction\lf
+    * stdatomic.h, C11%
+  }%
+\end{frame}
+
+\begin{frame}{Transactions}{I/O}
+  \centering
+  \begin{adjustbox}{max height=.8\textheight}%
+    \begin{tikzpicture}[x=10em,y=-2em,>=Stealth]
+      \node[draw,anchor=south] at (0,-1) {\strut kernel};
+      \node[draw,anchor=south] at (1,-1) {\strut userspace};
+      \draw (0,-1) -- (0,8.5);
+      \draw (1,-1) -- (1,8.5);
+
+      \draw[->] (-0.5,0) -- node[above=.5ex,anchor=base] {\texttt{data}} (0,0);
+      \draw[->] (0,0.5) to[bend left=90,looseness=2.5] node[right] (transform) {%
+        \shortstack[l]{%
+          update kernel\\
+          buffers%
+        }%
+      } (0,1.5);
+      \draw[->] (0,2) -- node[above=.5ex,anchor=base] {\texttt{ACK}} (-0.5,2);
+
+      \draw[->] (1,3.5) -- node[above=.5ex,anchor=base] {\manpage{2}{recv}} (0,3.5);
+      \draw[->] (0,4) to[bend left=90,looseness=2.5] node[right] (transform) {%
+        \shortstack[l]{%
+          update kernel\\
+          buffers%
+        }%
+      } (0,5);
+      \draw[->] (0,6) -- node[above=.5ex,anchor=base] {\texttt{return}} (1,6);
+
+\visible<2->{
+      \node[fill=white] at (0,6.5) {};
+      \node[fill=white] at (1,6.5) {};
+      \draw[dashed,Rot1] (1,6.5) ++(5em,0) -- node[fill=white] (sigkill) {\color{Rot1}\texttt{SIGKILL}} (-5em,6.5);
+}
+
+      \draw[->] (1,7) to[bend left=90,looseness=2.5] node[right] (transform) {%
+        \shortstack[l]{%
+          update userspace\\
+          buffers%
+        }%
+      } (1,8);
+      \draw[opacity=0] (0,7.5) -- ++($(1,4.5) - (transform.east)$);
+    \end{tikzpicture}
+  \end{adjustbox}%
+  \note{%
+    * kernel buffers bound to file descriptor\lf
+    * buffer in shared memory\lf
+    * syscall signal-atomic\lf
+    * Vgl. send%
+  }%
+\only<2>{%
+  \note{%
+    * lost return value\lf
+    * calling conventions\lf
+    * => recvmmsg%
+  }%
+}%
+\end{frame}
+
+\begin{frame}{Transactions}{\manpage{2}{recvmmsg}, \manpage{2}{sendmmsg}}
+  \begin{columns}
+    \begin{column}{0.55\textwidth}
+      \ttfamily
+      \footnotesize
+      \textcolor{Blau1}{struct} mmsghdr \{\newline
+      \hphantom{ \ \ \ }\textcolor{Blau1}{struct} msghdr msg\_hdr;\newline
+      \hphantom{ \ \ \ }\textcolor{Blau1}{unsigned int} msg\_len;\newline
+      \};\newline
+      \newline
+      \textcolor{Blau1}{int} recvmmsg(\textcolor{Blau1}{int} sockfd,\newline
+      \hphantom{ \ \ \ \ \ \ \ \ \ \ \ \ }\textcolor{Blau1}{struct} mmsghdr *msgvec,\newline
+      \hphantom{ \ \ \ \ \ \ \ \ \ \ \ \ }\textcolor{Blau1}{unsigned int} n,\newline
+      \hphantom{ \ \ \ \ \ \ \ \ \ \ \ \ }\textcolor{Blau1}{int} flags,\newline
+      \hphantom{ \ \ \ \ \ \ \ \ \ \ \ \ }\textcolor{Blau1}{struct} timespec *timeout);%
+    \end{column}%
+    \begin{column}{0.35\textwidth}%
+      \begin{adjustbox}{max height=.8\textheight}%
+        \begin{tikzpicture}[x=10em,y=-2em,>=Stealth]
+          \node[draw,anchor=south] at (0,-1) {\strut kernel};
+          \node[draw,anchor=south] at (1,-1) {\strut userspace};
+          \draw (0,-1) -- (0,8);
+          \draw (1,-1) -- (1,8);
+
+          \draw[->] (-0.5,0) -- node[above=.5ex,anchor=base] {\texttt{data}} (0,0);
+          \draw[->] (0,0.5) to[bend left=90,looseness=2.5] node[right] (transform) {%
+            \shortstack[l]{%
+              update kernel\\
+              buffers%
+            }%
+          } (0,1.5);
+          \draw[->] (0,2) -- node[above=.5ex,anchor=base] {\texttt{ACK}} (-0.5,2);
+
+          \draw[->] (1,3.5) -- node[above=.5ex,anchor=base] {\manpage{2}{recvmmsg}} (0,3.5);
+          \draw[->] (0,4) to[bend left=90,looseness=2.5] node[right] (transform) {%
+            \shortstack[l]{%
+              update kernel\\
+              buffers%
+            }%
+          } (0,5);
+\visible<2->{
+          \draw[->] (0,5.5) to[bend left=90,looseness=2.5] node[right] (transform) {%
+            \shortstack[l]{%
+              update\\
+              \texttt{\textcolor{Blau1}{struct} mmsghdr}%
+            }%
+          } (0,6.5);
+          \draw[->] (0,7.5) -- node[above=.5ex,anchor=base] {\texttt{return}} (1,7.5);
+}
+        \end{tikzpicture}%
+      \end{adjustbox}%
+    \end{column}%
+  \end{columns}%
+  \note{%
+    * multiple recvmsg\lf
+    * retval in msg_len\lf
+    * struct mmsghdr in shared memory\lf
+    * syscall is signal-atomic\lf
+    * possibly lost -1%
+  }%
+\end{frame}
+
+\begin{frame}{Transactions}{\manpage{2}{recvmmsg}, \manpage{2}{sendmmsg}}
+  \centering
+  \resizebox{!}{.8\textheight}{%
+    \begin{tikzpicture}[x=6em,y=-2em,>=Stealth]
+      \node[circle,fill,inner sep=.2em] (start) at (0,-0.5) {};
+
+      \node[rounded corners,draw,inner sep=.5em,anchor=north] (a) at (1,1) {\shortstack{write sentinel\\value (\texttt{-1}) to\\\texttt{\textcolor{Blau1}{struct} mmsghdr}}};
+      \draw[->] (start) -- ($(a.north) + (-1,-0.5)$) -- (a);
+
+\visible<2->{
+      \node[rounded corners,draw,inner sep=.5em,anchor=north] (b) at ($(a.south) + (0,1)$) {\itshape \shortstack{sentinel value\\was overwritten}};
+      \draw[->] (a) -- node[right] {\texttt{recvmmsg()}} (b);
+      \draw[dashed,->] (0,0.5) -- ($(b.north) + (-1,-0.5)$) -- (b);
+}
+
+\visible<3->{
+      \node[rounded corners,draw,inner sep=.5em,anchor=north] (c) at ($(b.south) + (0,1)$) {\shortstack{update buffers from\\\texttt{\textcolor{Blau1}{struct} mmsghdr}}};
+      \draw[->] (b) -- node[right] {\texttt{state := APPEND}} (c);
+      \draw[dashed,->] ($(b.north) + (-1,-0.5)$) -- ($(c.north) + (-1,-0.5)$) -- (c);
+
+      \node[circle,draw,inner sep=.5em,anchor=north] (d) at ($(c.south) + (0,1)$) {};
+      \node[circle,draw,inner sep=.35em] at (d) {};
+      \draw[->] (c) -- node[right] {\texttt{state := DONE}} (d);
+}
+    \end{tikzpicture}%
+  }%
+  \note{%
+    * sentinel\lf
+    * repeated syscall = bad\lf
+    * signal-atomic%
+  }%
+\end{frame}
+
+\begin{frame}{Transactions}{Transformation}
+  \begin{columns}
+    \begin{column}{0.6\textwidth}
+      \begin{adjustbox}{max width=\textwidth,max height=.8\textheight}%
+        \input{tikz/transform.tex}%
+      \end{adjustbox}%
+    \end{column}%
+    \begin{column}{0.3\textwidth}
+\visible<2->{%
+      \centering
+      \resizebox{!}{.8\textheight}{%
+        \begin{tikzpicture}[x=6em,y=-2em,>=Stealth]
+          \node[circle,fill,inner sep=.2em] (start) at (0,-0.5) {};
+
+          \node[rounded corners,draw,fill=white,inner sep=.5em,anchor=north] (a) at (1,1) {\shortstack{copy all\\five buffers}};
+          \draw[->] (start) -- ($(a.north) + (-1,-0.5)$) -- (a);
+
+          \node[rounded corners,draw,fill=white,inner sep=.5em,anchor=north] (b) at ($(a.south) + (0,0.5)$) {\shortstack{\texttt{transform()}\\on copies}};
+          \draw[->] (a) -- (b);
+
+          \node[rounded corners,draw,fill=white,inner sep=.5em,anchor=north] (c) at ($(b.south) + (0,1)$) {\shortstack{swap buffers\\and copies}};
+          \draw[->] (b) -- node[right] {\texttt{state := SWAP}} (c);
+
+          \draw[dashed,->] (0,0.5) -- ($(c.north) + (-1,-0.5)$) -- (c);
+
+          \node[circle,draw,fill=white,inner sep=.5em,anchor=north] (d) at ($(c.south) + (0,1)$) {};
+          \node[circle,draw,inner sep=.35em] at (d) {};
+          \draw[->] (c) -- node[right] {\texttt{state := DONE}} (d);
+        \end{tikzpicture}%
+      }%
+}%
+    \end{column}%
+  \end{columns}%
+  \note{%
+    * all or nothing\lf
+    * double buffering\lf
+    * ring buffers not duplicate\lf
+    * (skip transaction)%
+  }%
+\end{frame}
+
+\begin{frame}<1>[label=design-summary]
+  \frametitle{%
+    \only<2>{Recap: }Design Summary%
+  }%
+  \begin{columns}%
+    \begin{column}{0.5\textwidth}%
+      \begin{adjustbox}{max height=.7\textheight}%
+        \newif\ifchecked
+        \checkedtrue
+        \input{tikz/process-tree.tex}%
+      \end{adjustbox}%
+    \end{column}%
+    \begin{column}{0.4\textwidth}%
+      \hfill
+      \begin{adjustbox}{max height=.7\textheight}%
+        \begin{tikzpicture}[x=8em,y=-2em,>=Stealth]
+          \node[anchor=south,draw] at (0,-1) {\strut Client};
+          \node[anchor=south,draw] at (1,-1) {\strut Proxy};
+          \node[anchor=south,draw] at (2,-1) {\strut Server};
+
+          \fill[Blau2] (-0.25,-0.75) rectangle (2.25,1.25);
+          \fill[Gruen2] (-0.25,1.75) rectangle (2.25,6.25);
+
+          \draw (0,-1) -- (0,8.5);
+          \draw (1,-1) -- (1,8.5);
+          \draw (2,-1) -- (2,8.5);
+
+          \draw[->] (0,0) -- node[above=.5ex,anchor=base] {\manpage{2}{accept}} (1,0);
+          \draw[->] (1,0.5) -- node[above=.5ex,anchor=base] {\manpage{2}{connect}} (2,0.5);
+
+          \node[fill=white] at (0,1.5) {};
+          \node[fill=white] at (1,1.5) {};
+          \node[fill=white] at (2,1.5) {};
+          \draw[dashed] (-0.25,1.5) -- (2.25,1.5);
+
+          \draw[->] (0,2.5) -- node[above=.5ex,anchor=base] {\manpage{2}{recv}} (1,2.5);
+          \draw[->] (2,3) -- node[above=.5ex,anchor=base] {\manpage{2}{recv}} (1,3);
+          \draw[->] (1,3.5) to[bend left=90,looseness=3] node[right] (xfrm) {transform} (1,4.5);
+          \draw[->] (1,5) -- node[above=.5ex,anchor=base] {\manpage{2}{send}} (0,5);
+          \draw[->] (1,5.5) -- node[above=.5ex,anchor=base] {\manpage{2}{send}} (2,5.5);
+
+          \node[fill=white] at (0,6.5) {};
+          \node[fill=white] at (1,6.5) {};
+          \node[fill=white] at (2,6.5) {};
+          \draw[dashed] (-0.25,6.5) -- (2.25,6.5);
+
+          \draw[->] (1,7.5) -- node[above=.5ex,anchor=base] {\manpage{2}{close}} (2,7.5);
+          \draw[->] (1,8) -- node[above=.5ex,anchor=base] {\manpage{2}{close}} (0,8);
+        \end{tikzpicture}%
+      \end{adjustbox}%
+    \end{column}%
+  \end{columns}%
+  \note{%
+    * fd handling in listener\lf
+    * blau = fd\lf
+    * grün = transactions\lf
+    * close in beiden\lf
+    * everyone holds ref%
+  }%
+\end{frame}
+
+\begin{frame}{Evaluation}{Error injection}
+  \begin{columns}%
+    \begin{column}{0.5\textwidth}%
+      \ttfamily
+      \footnotesize
+      \textcolor{Blau1}{int} conn\_fd = accept(...);\newline
+      \newline
+      \textcolor{Rot1}{libcrash\_accept\_post}(conn\_fd, ...);\newline
+      \newline
+      \textcolor{Gruen1}{// Save file descriptor.}\newline
+      conn->downstream.fd[0] = conn\_fd;%
+    \end{column}%
+\visible<2->{%
+    \begin{column}{0.4\textwidth}%
+      \begin{adjustbox}{max height=.8\textheight}%
+        \begin{tikzpicture}[x=8em,y=-2em,>=Stealth]
+          \node[anchor=south,draw] at (0,-1) {\strut Client};
+          \node[anchor=south,draw] at (1,-1) {\strut Proxy};
+          \node[anchor=south,draw] at (2,-1) {\strut Server};
+
+          \draw (0,-1) -- (0,8.5);
+          \draw (1,-1) -- (1,8.5);
+          \draw (2,-1) -- (2,8.5);
+
+          \draw[->,Rot1] (0,0) -- node[above=.5ex,anchor=base] {\manpage{2}{accept}} (1,0);
+          \draw[->,Rot1] (1,0.5) -- node[above=.5ex,anchor=base] {\manpage{2}{connect}} (2,0.5);
+
+          \node[fill=white] at (0,1.5) {};
+          \node[fill=white] at (1,1.5) {};
+          \node[fill=white] at (2,1.5) {};
+          \draw[dashed] (-0.25,1.5) -- (2.25,1.5);
+
+          \draw[->,Rot1] (0,2.5) -- node[above=.5ex,anchor=base] {\manpage{2}{recv}} (1,2.5);
+          \draw[->,Rot1] (2,3) -- node[above=.5ex,anchor=base] {\manpage{2}{recv}} (1,3);
+          \draw[->] (1,3.5) to[bend left=90,looseness=3] node[right] {transform} (1,4.5);
+          \draw[->,Rot1] (1,5) -- node[above=.5ex,anchor=base] {\manpage{2}{send}} (0,5);
+          \draw[->,Rot1] (1,5.5) -- node[above=.5ex,anchor=base] {\manpage{2}{send}} (2,5.5);
+
+          \node[fill=white] at (0,6.5) {};
+          \node[fill=white] at (1,6.5) {};
+          \node[fill=white] at (2,6.5) {};
+          \draw[dashed] (-0.25,6.5) -- (2.25,6.5);
+
+          \draw[->] (1,7.5) -- node[above=.5ex,anchor=base] {\manpage{2}{close}} (2,7.5);
+          \draw[->] (1,8) -- node[above=.5ex,anchor=base] {\manpage{2}{close}} (0,8);
+        \end{tikzpicture}
+      \end{adjustbox}%
+    \end{column}%
+}%
+  \end{columns}%
+  \note{%
+    * als shared library\lf
+    * 11 hooks\lf
+    * unit tests (I/O)\lf
+    * schwurbel xfrm%
+  }%
+\end{frame}
+
+\begin{frame}{Evaluation}{Setup}
+  \begin{center}%
+    \centering
+    \begin{adjustbox}{max height=.8\textheight}%
+      \input{tikz/veth.tex}%
+    \end{adjustbox}%
+  \end{center}%
+
+  \begin{itemize}
+    \item Intel Core i9-13900K
+    \item 128\,GiB RAM
+    \item Linux kernel 6.12.101
+  \end{itemize}
+  \note{%
+    * bisher proto-agnostic\lf
+    * HTTP easy & ecosystem\lf
+    * explain baseline architecture\lf
+    * why HAProxy%
+  }%
+\end{frame}
+
+\begin{frame}{Evaluation}{No-op transformation}
+  \centering
+  \begin{adjustbox}{max height=.75\textheight}%
+    \newif\ifnolegend
+    \nolegendtrue
+    \input{tikz/vegeta-transform_nop-1M-100c.tex}%
+  \end{adjustbox}
+
+  1\,MiB response, 100 concurrent connections
+
+  \textcolor {green!75!black}{\rule{1ex}{1ex}} nginx |
+  \textcolor{orange!75!black}{\rule{1ex}{1ex}} HAProxy (TCP) |
+  \textcolor  {blue!75!black}{\rule{1ex}{1ex}} baseline variant |
+  \textcolor   {red!75!black}{\rule{1ex}{1ex}} crash-tolerant variant%
+  \note{%
+    * 1 MiB, 100 conn\lf
+    * 600 seconds\lf
+    * median: 2.84ms, 68.26ms, 32.62ms, 36.86ms\lf
+    * dedicated listener\lf
+    * steps?%
+  }%
+\end{frame}
+
+\begin{frame}{Evaluation}{HTTP header transformation}
+  \centering
+  \begin{adjustbox}{max height=.75\textheight}%
+    \newif\ifnolegend
+    \nolegendtrue
+    \input{tikz/vegeta-transform_headers-1M-10c.tex}%
+  \end{adjustbox}
+
+  1\,MiB response, 10 concurrent connections
+
+  \textcolor{orange!75!black}{\rule{1ex}{1ex}} HAProxy (HTTP) |
+  \textcolor  {blue!75!black}{\rule{1ex}{1ex}} baseline variant |
+  \textcolor   {red!75!black}{\rule{1ex}{1ex}} crash-tolerant variant%
+  \note{%
+    * add/remove HTTP headers\lf
+    * 1 MiB, 10 conn\lf
+    * 600 seconds\lf
+    * bad HTTP\lf
+    * median: 3.9ms, 5.85ms, 5.89ms%
+  }%
+\end{frame}
+
+\begin{frame}{Evaluation}{Recovery}
+  \vfill
+  \centering
+  \begin{adjustbox}{max height=.8\textheight}%
+    \input{tikz/fail-recv.tex}%
+  \end{adjustbox}%
+  \note{%
+    * N-1 conns\lf
+    * N-th fails recvmmsg\lf
+    * dumb recovery (/proc/self/fd)\lf
+    * all connections because only one worker\lf
+    * bottleneck IPC%
+  }%
+\end{frame}
+
+\begin{frame}{Conclusion}
+  \begin{itemize}
+  \item
+    successful proof of concept
+  \item
+    runtime overhead: between 0.3\,\% and 21.8\,\%
+  \item
+    memory overhead: 424\,B per connection (+ passive listener)
+  \item
+    crash recovery covers live-upgrade
+  \item<2->
+    BUT corruption of shared memory possible
+  \end{itemize}
+
+  \note{%
+    * depending on xfrm & size\lf
+    * many transactions/connections > overhead\lf
+    * upgrade%
+  }%
+\end{frame}
+
+\begin{frame}{Future work}
+  \begin{columns}%
+    \begin{column}{0.3\textwidth}%
+      \begin{itemize}
+        \item protect shared memory
+        \item multiple workers
+        \item session state
+        \item \manpage{7}{io\_uring}
+        \pause
+        \item manual \texttt{ACK}
+      \end{itemize}%
+    \end{column}%
+    \begin{column}{0.6\textwidth}%
+      \hfill
+      \begin{adjustbox}{max height=.8\textheight}%
+        \input{tikz/ack-recv.tex}%
+      \end{adjustbox}%
+    \end{column}%
+  \end{columns}%
+  \note{%
+    * io_uring mit accept%
+  }%
+\end{frame}
+
+\againframe<2>{design-summary}
+
+\begin{frame}
+  \frametitle{Bibliography}
+  {%
+    \renewcommand*{\bibfont}{\normalfont\scriptsize}%
+    \printbibliography
+  }%
+\end{frame}
+
+\end{document}

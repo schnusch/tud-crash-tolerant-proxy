@@ -6,8 +6,8 @@
 \node[anchor=west] (fdtab) at ({$(label2.east) + (0.5em,0)$} |- {0,0.5}) {\shortstack{file descriptor\\table}};
 
 \begin{pgfonlayer}{background}
-    \node[draw,rounded corners,fit=(label1)({fdtab.east} |- {label1.north}),inner sep=.5em] (proc1) {};
-    \node[draw,rounded corners,fit=(label2)({fdtab.east} |- {label2.south}),inner sep=.5em] (proc2) {};
+    \node[draw,fill=white,rounded corners,fit=(label1)({fdtab.east} |- {label1.north}),inner sep=.5em] (proc1) {};
+    \node[draw,fill=white,rounded corners,fit=(label2)({fdtab.east} |- {label2.south}),inner sep=.5em] (proc2) {};
     \node[draw,fill=gray!30,fit=({fdtab.west} |- {label1.north})({fdtab.east} |- {label2.south}),inner sep=0] {};
 \end{pgfonlayer}
 

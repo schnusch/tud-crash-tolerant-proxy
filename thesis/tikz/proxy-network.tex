@@ -1,6 +1,10 @@
+\provideif{ifcrash}%
 \begin{tikzpicture}[x=8em,y=2.5em,inner sep=0.5em,>=Stealth]
 
 \node[draw,fill=white,inner sep=1em,label=below:{Proxy}] (proxy) at (0,0) {\phantom{Proxy}};
+\ifcrash
+    \node[anchor=south] at (proxy.north) {\scalebox{3}{\color{Rot1}\Lightning}};
+\fi
 
 % Opaque background, see edges below.
 \node[draw,fill=white,rounded corners] (client1) at (-1, 1.5) {Client};

@@ -1,6 +1,17 @@
-\pgfdeclarelayer{behindbackground}
-\pgfdeclarelayer{background}
-\pgfsetlayers{behindbackground,background,main}
+\pgfdeclarelayer{behindbackground}%
+\pgfdeclarelayer{background}%
+\pgfsetlayers{behindbackground,background,main}%
+
+\provideif{ifchecked}%
+\ifchecked
+\else
+    \colorlet{Gruen2}{white}%
+    \colorlet{Blau2}{white}%
+\fi
+
+\csname @ifundefined\endcsname{secondslide}{%
+    \newenvironment{secondslide}{}{}%
+}{}%
 
 \begin{tikzpicture}[>=Stealth]
 
@@ -19,10 +30,11 @@
 \node[inner sep=0,anchor=north east] (label_passive) at ({label_active.east} |- {fdtab1.north}) {\textbf{passive listener}};
 
 \begin{pgfonlayer}{background}
-    \node[draw,rounded corners,fill=white,fit=(label_active)(fdtab1.south east),inner sep=.5em] (active) {};
+    \node[draw,rounded corners,fill=Blau2,fit=(label_active)(fdtab1.south east),inner sep=.5em] (active) {};
     \node[draw,rounded corners,fill=white,fit=(label_passive)(fdtab1.north east),inner sep=.5em] (passive) {};
 \end{pgfonlayer}
 
+\begin{secondslide}
 \node[inner sep=0,anchor=east] (label_worker) at (0,-6em) {\phantom{\textbf{passive listener}}};
 \node[inner sep=0] at (label_worker) {\textbf{worker}};
 \node[draw,fill=gray!30,anchor=north west] (fdtab2) at ({fdtab1.west} |- {label_worker.north}) {
@@ -34,11 +46,19 @@
         \textbullet\ \textbf{connection \textit{N}}%
     }%
 };
-\node[draw,rounded corners,fit=(label_worker)(fdtab2),inner sep=.5em] (worker) {};
+\end{secondslide}
+
+\begin{pgfonlayer}{background}
+    \begin{secondslide}
+        \node[draw,rounded corners,fill=Gruen2,fit=(label_worker)(fdtab2),inner sep=.5em] (worker) {};
+    \end{secondslide}
+\end{pgfonlayer}
 
 \draw[->] ({label_worker} |- {passive.south})
     -- node[left] {\href{https://man7.org/linux/man-pages/man2/clone.2.html}{\texttt{clone(CLONE\_FILES)}}}
     ({label_worker} |- {active.north});
+
+\begin{secondslide}
 \draw[->] ({label_worker} |- {active.south})
     -- node[left] {%
         \shortstack[r]{%
@@ -54,13 +74,14 @@
 \draw[->] ({$(fdtab2) + (0.5ex,0)$} |- {worker.north})
     -- node[right] {\shortstack[l]{IPC \& copy\\file descriptors}}
     ({$(fdtab2) + (0.5ex,0)$} |- {active.south});
+\end{secondslide}
 
 \iftrue
 
 \node[
     inner sep=.5em,
     path picture={
-        \draw
+        \draw[fill=Gruen2]
             ($(path picture bounding box.north east) + (-.5\pgflinewidth,-.5\pgflinewidth)$)
             ++(-1em,0)
             -- ++(0,-1em)
@@ -76,8 +97,27 @@
     \draw[->] ({fdtab1.east} |- {passive.east}) -- (shmem);
     \draw[->] ({fdtab1.east} |- {active.east})  -- (shmem);
 \end{pgfonlayer}
+\begin{secondslide}
 \draw[->] (worker) -- (shmem);
+\end{secondslide}
 
+\fi
+
+\iffalse
+    \node[anchor=north west] at (fdtab1.north east) {%
+        \hspace{1ex}\color{Gruen1}\Large\bfseries
+        \shortstack{%
+            \ding{52} redundancy\hphantom{ \ding{52}}\\
+            (processes)%
+        }%
+    };
+    \node[anchor=north west] at (shmem.south west) {%
+        \color{Gruen1}\Large\bfseries
+        \shortstack{%
+            \ding{52} consistency\hphantom{ \ding{52}}\\
+            (transactions)%
+        }%
+    };
 \fi
 
 \end{tikzpicture}

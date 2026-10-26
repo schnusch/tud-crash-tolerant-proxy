@@ -23,9 +23,12 @@ clean:
 
 html: $(TIKZ_SVGS) out/$(NAME)/index.html
 
-pdf: out/$(NAME).pdf
+pdf: out/$(NAME).pdf presentation/main.pdf
 
 # final PDF
+
+presentation/main.pdf:
+	$(MAKE) -C $(@D) $(@F)
 
 out/$(NAME).pdf: tmp/tex/$(NAME).pdf $(PDF_ATTACHMENTS)
 	@mkdir -p $(@D)

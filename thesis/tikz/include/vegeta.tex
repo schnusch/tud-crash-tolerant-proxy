@@ -1,5 +1,6 @@
 \providecommand*{\xopts}{}%
 \providecommand*{\binsyopts}{}%
+\provideif{ifnolegend}%
 \newcommand*{\plotcumu}[1]{%
     \addplot[
         const plot mark left,
@@ -74,6 +75,10 @@
     \binsyopts
 ]
 \binsplots
+
+\ifnolegend
+    \legend{}%
+\fi
 %\pgfkeys{/pgf/fpu=false}%
 
 \end{groupplot}
