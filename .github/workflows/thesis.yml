@@ -12,6 +12,8 @@ env:
 jobs:
   build_vegeta_prereqs:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
     steps:
     - uses: cachix/install-nix-action@v31
     - uses: actions/cache/restore@v4
@@ -22,6 +24,11 @@ jobs:
     - run: ${{ env.nix_copy_from }}
     - run: nix build -L './thesis#default.vegetaPrereqs'
     - run: nix copy --to file://${{ env.cache_path }} './thesis#default.vegetaPrereqs'
+    - env:
+        GH_TOKEN: ${{ github.token }}
+      run: >-
+        cache_id=$(gh cache list -k "$cache_key" --json id --jq '.[0].id');
+        [ -z "$cache_id" ] || gh cache delete "$cache_id"
     - uses: actions/cache/save@v4
       with:
         key: ${{ env.cache_key }}
