@@ -19,8 +19,6 @@ jobs:
         key: ${{ env.cache_key }}
         path: ${{ env.cache_path }}
     - uses: actions/checkout@v4
-      with:
-        submodules: recursive
     - run: ${{ env.nix_copy_from }}
     - run: nix build -L './thesis#default.vegetaPrereqs'
     - run: nix copy --to file://${{ env.cache_path }} './thesis#default.vegetaPrereqs'
@@ -39,10 +37,8 @@ jobs:
       with:
         key: ${{ env.cache_key }}
         path: ${{ env.cache_path }}
-    - run: ${{ env.nix_copy_from }}
     - uses: actions/checkout@v4
-      with:
-        submodules: recursive
+    - run: ${{ env.nix_copy_from }}
     - run: >-
         GIT_BUNDLE="tmp/tex/crash-tolerant-proxy-$(git rev-parse --verify --short ${{ github.ref }}).bundle"
         && cd thesis
