@@ -2,18 +2,44 @@
   lib,
   stdenvNoCC,
   fetchurl,
+  lndir,
   pandoc,
   pv,
   python3,
   qpdf,
+  symlinkJoin,
   texliveFull,
   unzip,
   xan,
   zopfli,
   date ? null,
+  usePrereqs ? true,
 }:
 
-stdenvNoCC.mkDerivation {
+let
+
+  linkTarballs = lib.concatStrings (
+    lib.mapAttrsToList
+      (name: hash: ''
+        tar -C ../benchmark/vegeta -xzf ${
+          fetchurl {
+            url = "https://github.com/schnusch/tud-crash-tolerant-proxy/releases/download/benchmark/${name}";
+            inherit hash;
+          }
+        }
+      '')
+      {
+        "transform_expensive.tar.gz" =
+          "sha256:4a2d93ba698169dba0053e7d6758992ebbeebc5116f7aeec58ac4276ddaba0de";
+        "transform_headers.tar.gz" =
+          "sha256:0803ad31f35a0d3f0524035da6092bf8aa6bbba85658a6783cb6e0876e6ccc69";
+        "transform_nop.tar.gz" = "sha256:81450bd55a71a57937a8704c2b4de03745b9c96d9ab3001e038e662e1f49b8d3";
+      }
+  );
+
+in
+
+stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "crash-tolerant-proxy-thesis";
   version = "0.0";
 
@@ -21,12 +47,9 @@ stdenvNoCC.mkDerivation {
 
   nativeBuildInputs = [
     pandoc
-    pv
-    python3
     qpdf
     texliveFull
     unzip
-    xan
     zopfli
   ];
 
@@ -39,27 +62,10 @@ stdenvNoCC.mkDerivation {
     lib.optionalString (date != null) ''
       { echo '---'; echo 'date:' ${lib.escapeShellArg (builtins.toJSON date)}; echo '...'; } > 02_date.yaml
     ''
-    + ''
-      mkdir -p ../benchmark/vegeta
+    + linkTarballs
+    + lib.optionalString usePrereqs ''
+      ${lib.getExe lndir} -silent ${finalAttrs.passthru.vegetaPrereqs}
     ''
-    + lib.concatStrings (
-      lib.mapAttrsToList
-        (name: hash: ''
-          tar -C ../benchmark/vegeta -xzf ${
-            fetchurl {
-              url = "https://github.com/schnusch/tud-crash-tolerant-proxy/releases/download/benchmark/${name}";
-              inherit hash;
-            }
-          }
-        '')
-        {
-          "transform_expensive.tar.gz" =
-            "sha256:4a2d93ba698169dba0053e7d6758992ebbeebc5116f7aeec58ac4276ddaba0de";
-          "transform_headers.tar.gz" =
-            "sha256:0803ad31f35a0d3f0524035da6092bf8aa6bbba85658a6783cb6e0876e6ccc69";
-          "transform_nop.tar.gz" = "sha256:81450bd55a71a57937a8704c2b4de03745b9c96d9ab3001e038e662e1f49b8d3";
-        }
-    )
     + ''
       ln -fs ${
         fetchurl {
@@ -88,7 +94,64 @@ stdenvNoCC.mkDerivation {
     runHook postInstall
   '';
 
+  passthru = {
+    # Build complex CSVs separately.
+    vegetaPrereqs =
+      let
+        buildVegeta =
+          target:
+          stdenvNoCC.mkDerivation {
+            name = baseNameOf target;
+
+            src = lib.sourceByRegex finalAttrs.src [
+              "GNUmakefile"
+              "tikz"
+              "tikz/include"
+              "tikz/include/vegeta\\.tex"
+              "tools"
+              "tools/.*"
+            ];
+
+            nativeBuildInputs = [
+              pv
+              python3
+              xan
+            ];
+
+            makeFlags = [ target ];
+
+            preBuild = ''
+              mkdir -p ../benchmark/vegeta
+            ''
+            + linkTarballs
+            + ''
+              patchShebangs --build tools/
+              export HOME=$(mktemp -d)
+            '';
+
+            installPhase = ''
+              runHook preInstall
+              mkdir -p "$out/data"
+              cp -rv data/vegeta "$out/data"
+              runHook postInstall
+            '';
+
+            inherit (finalAttrs) meta;
+          };
+
+        vegetaSources = builtins.filter (x: builtins.match "vegeta-.*\\.tex" x != null) (
+          builtins.attrNames (builtins.readDir "${finalAttrs.src}/tikz")
+        );
+        vegetaTargets = builtins.map (x: "tmp/html/tikz/" + x) vegetaSources;
+      in
+      symlinkJoin (finalAttrs: {
+        name = "vegeta";
+        paths = builtins.attrValues finalAttrs.passthru;
+        passthru = lib.genAttrs vegetaTargets buildVegeta;
+      });
+  };
+
   meta = {
     maintainers = with lib.maintainers; [ schnusch ];
   };
-}
+})
