@@ -62,10 +62,14 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     lib.optionalString (date != null) ''
       { echo '---'; echo 'date:' ${lib.escapeShellArg (builtins.toJSON date)}; echo '...'; } > 02_date.yaml
     ''
-    + linkTarballs
-    + lib.optionalString usePrereqs ''
-      ${lib.getExe lndir} -silent ${finalAttrs.passthru.vegetaPrereqs}
-    ''
+    + (
+      if usePrereqs then
+        ''
+          ${lib.getExe lndir} -silent ${finalAttrs.passthru.vegetaPrereqs}
+        ''
+      else
+        linkTarballs
+    )
     + ''
       ln -fs ${
         fetchurl {
